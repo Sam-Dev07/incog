@@ -3,8 +3,10 @@
   incog — PUBLIC SUBMISSION PAGE (index.html)
   Visitors land here via  index.html?user=USERNAME  and drop an anonymous message.
   - No sign-in required for the sender.
-  - Only three fields are ever written: messageText, receiverUsername, timestamp.
-    No IP, no location, no device info, no user-agent. Nothing identifying.
+  - The message document has EXACTLY three fields: messageText, receiverUsername, timestamp.
+  - Abuse protection: a one-way hash of the sender's network address is stored in a separate
+    collection (drop_meta) that only the admin can read. It is used for the 3-hour send limit
+    and for bans. The recipient can NEVER see it.
 -->
 <html lang="en">
 <head>
@@ -12,6 +14,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>incog — send an anonymous message</title>
   <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#07060d" />
+  <link rel="icon" href="logo.png" />
+
+  <!-- ============ LINK PREVIEW (WhatsApp / Instagram / Discord / Twitter) ============
+       Preview tags must be static (crawlers don't run JavaScript), so every link shows
+       the same card. If you change your website address, update the og:image URL below.
+       TIP: compress logo.png to under ~300 KB so WhatsApp shows the image. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="incog" />
+  <meta property="og:title" content="Send me an anonymous message" />
+  <meta property="og:description" content="Say what you really think. Your name is never shown to me. — incog" />
+  <meta property="og:image" content="https://incog-ycnh.onrender.com/logo.png" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Send me an anonymous message" />
+  <meta name="twitter:description" content="Say what you really think. Your name is never shown to me. — incog" />
+  <meta name="twitter:image" content="https://incog-ycnh.onrender.com/logo.png" />
 
   <!-- Tailwind via CDN (no build step) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -27,7 +45,7 @@
       overflow-x: hidden;
     }
 
-    /* ---------- Cyber-noir backdrop: faint grid + drifting glow orbs ---------- */
+    /* ---------- Cyber-noir backdrop ---------- */
     .grid-bg {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image:
@@ -50,11 +68,8 @@
       -webkit-backdrop-filter: blur(22px);
       box-shadow: 0 0 0 1px rgba(168,85,247,.08), 0 30px 80px -20px rgba(124,58,237,.45), inset 0 1px 0 rgba(255,255,255,.08);
     }
-
-    /* Logo ring glow */
     .logo-ring { box-shadow: 0 0 0 2px rgba(192,38,211,.5), 0 0 34px rgba(168,85,247,.6); }
 
-    /* ---------- Textarea ---------- */
     .drop-input {
       background: rgba(8, 6, 16, .65);
       border: 1px solid rgba(255,255,255,.1);
@@ -66,7 +81,6 @@
       box-shadow: 0 0 0 4px rgba(217, 70, 239, .14), 0 0 28px rgba(168, 85, 247, .25);
     }
 
-    /* ---------- Primary button ---------- */
     .btn-glow {
       background: linear-gradient(90deg, #7c3aed, #c026d3);
       box-shadow: 0 10px 40px -8px rgba(192, 38, 211, .65);
@@ -102,22 +116,6 @@
         <p class="mt-5 text-sm text-zinc-400 tracking-wide">Establishing secure channel…</p>
       </div>
 
-      <!-- ===================== VIEW: LANDING (no ?user= in the URL) ===================== -->
-      <div id="view-landing" class="view hidden-view text-center py-6">
-        <div class="logo-ring mx-auto h-24 w-24 rounded-full overflow-hidden bg-black/60 flex items-center justify-center">
-          <img src="logo.png" alt="incog logo" class="h-full w-full object-cover"
-               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-          <span style="display:none" class="h-full w-full items-center justify-center text-4xl font-extrabold bg-gradient-to-br from-violet-500 to-fuchsia-500 bg-clip-text text-transparent">i</span>
-        </div>
-        <h1 class="mt-6 text-3xl font-extrabold bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">incog</h1>
-        <p class="mt-3 text-sm text-zinc-400 max-w-xs mx-auto">
-          Get your own link. Share it. Your friends send you anonymous messages, and only you can read them.
-        </p>
-        <a href="dashboard.html?mode=signup" class="btn-glow mt-8 block w-full rounded-2xl py-3.5 font-semibold text-white tracking-wide">Create my incog link</a>
-        <a href="dashboard.html" class="mt-3 block w-full rounded-2xl py-3.5 font-semibold text-zinc-200 border border-white/10 hover:border-fuchsia-400/40 transition">Log in</a>
-        <p class="mt-6 text-[11px] text-zinc-500">Free. No tracking. Senders are never identified.</p>
-      </div>
-
       <!-- ===================== VIEW: NOT FOUND ===================== -->
       <div id="view-notfound" class="view hidden-view text-center py-10">
         <div class="text-5xl mb-4">🕳️</div>
@@ -128,10 +126,8 @@
 
       <!-- ===================== VIEW: FORM ===================== -->
       <div id="view-form" class="view hidden-view">
-        <!-- Profile header with custom logo -->
         <div class="flex flex-col items-center text-center">
           <div class="logo-ring h-20 w-20 rounded-full overflow-hidden bg-black/60 flex items-center justify-center">
-            <!-- Your custom logo. If logo.png is missing we fall back to a glyph. -->
             <img src="logo.png" alt="incog logo" class="h-full w-full object-cover"
                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
             <span style="display:none" class="h-full w-full items-center justify-center text-3xl font-extrabold bg-gradient-to-br from-violet-500 to-fuchsia-500 bg-clip-text text-transparent">i</span>
@@ -144,7 +140,6 @@
           <p class="mt-2 text-sm text-zinc-400">No name. No trace. Say what you really think.</p>
         </div>
 
-        <!-- Message box -->
         <form id="drop-form" class="mt-7" autocomplete="off">
           <div class="relative">
             <textarea id="message" rows="5" maxlength="300" placeholder="Type your secret…"
@@ -163,8 +158,10 @@
             Drop Secret Anonymously
           </button>
 
-          <p class="mt-4 text-center text-[11px] text-zinc-500">
-            🔒 We never collect your IP, location or device. Ever.
+          <!-- Honest privacy line: the recipient never sees who you are, but abuse protection exists. -->
+          <p class="mt-4 text-center text-[11px] leading-relaxed text-zinc-500">
+            🔒 Your identity is never shown to the recipient. To limit spam and abuse, a one-way hash of
+            your network address is kept, visible only to the site admin. Harassment and threats can lead to a ban.
           </p>
         </form>
       </div>
@@ -180,7 +177,6 @@
         <p class="mt-2 text-sm text-zinc-400 max-w-xs mx-auto">
           Your message was securely delivered to <span id="success-user" class="text-fuchsia-300 font-semibold"></span>. They'll never know it was you.
         </p>
-        <button id="again-btn" class="mt-7 text-sm text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-4">Send another</button>
         <div class="mt-8 pt-6 border-t border-white/5">
           <a href="dashboard.html" class="text-xs text-zinc-400 hover:text-zinc-200">Want your own incog link? Get it free →</a>
         </div>
@@ -195,10 +191,9 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
     import {
-      getFirestore, doc, getDoc, collection, addDoc, serverTimestamp
+      getFirestore, doc, getDoc, collection, writeBatch, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-    // ---- Firebase config (authDomain corrected to the real *.firebaseapp.com host) ----
     const firebaseConfig = {
       apiKey: "AIzaSyCBP4dP0fec0viULN0YQdCTSLH_HS-Br7A",
       authDomain: "incog-e20b7.firebaseapp.com",
@@ -213,37 +208,75 @@
 
     // ---- DOM helpers ----
     const $ = (id) => document.getElementById(id);
-    const views = ["loading", "landing", "notfound", "form", "success"];
+    const views = ["loading", "notfound", "form", "success"];
     function show(name) {
       views.forEach(v => $("view-" + v).classList.toggle("hidden-view", v !== name));
     }
 
     const MAX = 300;
-    const COOLDOWN_MS = 15000; // light client-side anti-spam (cannot be fully enforced client-side)
+    // Must match the duration in firestore.rules (duration.value(3, 'h'))
+    const LIMIT_MS = 3 * 60 * 60 * 1000;
 
-    // ---- 1) Extract ?user= from the URL ----
+    // ------------------------------------------------------------------
+    // Network hash helpers (abuse protection)
+    // The raw address is never stored — only a SHA-256 hash.
+    // ------------------------------------------------------------------
+    async function fetchIp() {
+      const attempts = [
+        async () => (await (await fetch("https://api.ipify.org?format=json", { cache: "no-store" })).json()).ip,
+        async () => {
+          const t = await (await fetch("https://www.cloudflare.com/cdn-cgi/trace", { cache: "no-store" })).text();
+          const m = t.match(/^ip=(.+)$/m);
+          return m && m[1].trim();
+        }
+      ];
+      for (const attempt of attempts) {
+        try { const ip = await attempt(); if (ip) return ip; } catch (_) { /* try next */ }
+      }
+      throw new Error("ip-lookup-failed");
+    }
+
+    function expandV6(ip) {
+      ip = ip.split("%")[0];
+      const parts = ip.split("::");
+      const head = parts[0] ? parts[0].split(":") : [];
+      if (parts.length === 1) return head.map(x => x.padStart(4, "0")).join(":");
+      const tail = parts[1] ? parts[1].split(":") : [];
+      const fill = Array(Math.max(0, 8 - head.length - tail.length)).fill("0");
+      return [...head, ...fill, ...tail].map(x => x.padStart(4, "0")).join(":");
+    }
+
+    async function getIpHash() {
+      let ip = await fetchIp();
+      // IPv6 users rotate the last 64 bits constantly, so only the /64 prefix is used.
+      if (ip.includes(":")) ip = expandV6(ip).split(":").slice(0, 4).join(":");
+      const bytes = new TextEncoder().encode("incog-v1|" + ip);
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function fmtLeft(ms) {
+      const mins = Math.ceil(ms / 60000);
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+
+    // ---- 1) Read ?user= from the URL ----
     const params   = new URLSearchParams(window.location.search);
     const username = (params.get("user") || "").trim().toLowerCase();
     const VALID    = /^[a-z0-9_]{3,20}$/;
 
     async function init() {
-      // No ?user= at all -> someone opened the main site: show sign up / log in
+      // No ?user= at all -> someone opened the main site: send them to login / sign up
       if (!params.has("user")) {
-        // Send straight to the dashboard (login / sign up). URL becomes /dashboard.html
         window.location.replace("dashboard.html");
         return;
       }
-      if (!VALID.test(username)) {
-        show("notfound");
-        return;
-      }
+      if (!VALID.test(username)) { show("notfound"); return; }
+
       try {
-        // Confirm the recipient exists. 'usernames/{name}' is publicly readable.
         const snap = await getDoc(doc(db, "usernames", username));
-        if (!snap.exists()) {
-          show("notfound");
-          return;
-        }
+        if (!snap.exists()) { show("notfound"); return; }
       } catch (err) {
         console.error(err);
         $("notfound-msg").textContent = "Couldn't reach the server. Check your connection and try again.";
@@ -251,21 +284,19 @@
         return;
       }
 
-      // ---- 2) Dynamic header: "Send @USERNAME an anonymous message" ----
       $("headline-user").textContent = "@" + username;
       document.title = `Send @${username} an anonymous message — incog`;
       $("success-user").textContent = "@" + username;
       show("form");
     }
 
-    // ---- 3) Textarea + counter + hard lock at 300 chars ----
+    // ---- 2) Textarea + counter + hard lock at 300 chars ----
     const textarea = $("message");
     const counter  = $("counter");
     const sendBtn  = $("send-btn");
     const lockNote = $("lock-note");
 
     function updateCounter() {
-      // maxlength already blocks typing; this also guards against paste edge-cases.
       if (textarea.value.length > MAX) textarea.value = textarea.value.slice(0, MAX);
       const len = textarea.value.length;
       counter.textContent = `${len} / ${MAX}`;
@@ -283,7 +314,7 @@
     }
     function clearError() { $("error").classList.add("hidden"); }
 
-    // ---- 4) Submit: write EXACTLY { messageText, receiverUsername, timestamp } ----
+    // ---- 3) Submit ----
     $("drop-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       clearError();
@@ -291,41 +322,67 @@
       const text = textarea.value.trim();
       if (!text) return;
 
-      // Cooldown
-      try {
-        const last = Number(localStorage.getItem("incog_last_drop") || 0);
-        if (Date.now() - last < COOLDOWN_MS) {
-          showError("Easy there — wait a few seconds before sending another.");
-          return;
-        }
-      } catch (_) { /* localStorage may be blocked; ignore */ }
-
       sendBtn.disabled = true;
       const original = sendBtn.textContent;
       sendBtn.textContent = "Encrypting & sending…";
 
       try {
-        await addDoc(collection(db, "anonymous_drops"), {
+        let ipHash;
+        try { ipHash = await getIpHash(); }
+        catch (_) {
+          showError("Couldn't verify your connection. Turn off any VPN or ad-blocker for this page and try again.");
+          return;
+        }
+
+        // Friendly pre-checks (the Firestore rules enforce the same things server-side)
+        const [banSnap, limSnap] = await Promise.all([
+          getDoc(doc(db, "banned_ips", ipHash)),
+          getDoc(doc(db, "ip_limits", ipHash))
+        ]);
+
+        if (banSnap.exists()) {
+          showError("You've been blocked from sending messages on incog.");
+          return;
+        }
+        if (limSnap.exists()) {
+          const last = limSnap.data().lastSent && limSnap.data().lastSent.toMillis ? limSnap.data().lastSent.toMillis() : 0;
+          const left = last + LIMIT_MS - Date.now();
+          if (left > 0) {
+            showError("You've already sent a message recently. Please try again in about " + fmtLeft(left) + ".");
+            return;
+          }
+        }
+
+        // One atomic batch:
+        //   1) the message itself — EXACTLY { messageText, receiverUsername, timestamp }
+        //   2) admin-only metadata (network hash) used for bans/reports
+        //   3) the send-limit marker for this network
+        const dropRef = doc(collection(db, "anonymous_drops"));
+        const batch = writeBatch(db);
+        batch.set(dropRef, {
           messageText: text.slice(0, MAX),
           receiverUsername: username,
           timestamp: serverTimestamp()
-          // Intentionally NOTHING else: no IP, no geo, no device metrics.
         });
+        batch.set(doc(db, "drop_meta", dropRef.id), {
+          ipHash,
+          receiverUsername: username,
+          createdAt: serverTimestamp()
+        });
+        batch.set(doc(db, "ip_limits", ipHash), { lastSent: serverTimestamp() });
+        await batch.commit();
 
-        try { localStorage.setItem("incog_last_drop", String(Date.now())); } catch (_) {}
         textarea.value = "";
         updateCounter();
         show("success");
       } catch (err) {
         console.error(err);
-        showError("Transmission failed. Please try again.");
+        showError("Couldn't send right now. Please try again later.");
       } finally {
         sendBtn.textContent = original;
         sendBtn.disabled = textarea.value.trim().length === 0;
       }
     });
-
-    $("again-btn").addEventListener("click", () => { show("form"); textarea.focus(); });
 
     init();
   </script>

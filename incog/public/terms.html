@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>incog — Terms of Service</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" href="logo.png" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; background: #07060d; color: #e9e6f5; min-height: 100vh; }
+    .glass { background: linear-gradient(145deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); border: 1px solid rgba(255,255,255,.09); backdrop-filter: blur(22px); box-shadow: 0 30px 80px -25px rgba(124,58,237,.4); }
+    h2 { margin-top: 1.75rem; font-size: 1.05rem; font-weight: 800; color: #f0abfc; }
+    p, li { margin-top: .5rem; font-size: .9rem; line-height: 1.65; color: #c9c5d9; }
+    ul { list-style: disc; padding-left: 1.25rem; }
+  </style>
+</head>
+<body class="px-4 py-8 sm:py-12">
+  <main class="mx-auto max-w-2xl">
+    <a href="dashboard.html" class="text-sm text-fuchsia-300 hover:text-fuchsia-200">← Back to incog</a>
+    <article class="glass rounded-3xl p-7 sm:p-10 mt-5">
+      <h1 class="text-3xl font-extrabold bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">Terms of Service</h1>
+      <p class="!mt-2 text-xs text-zinc-500">Last updated: October 25, 2026</p>
+
+      <h2>1. What incog is</h2>
+      <p>incog lets you create a personal link. Anyone with the link can send you an anonymous message, and only you can read the messages sent to you. By creating an account or sending a message you agree to these terms.</p>
+
+      <h2>2. Who can use it</h2>
+      <p>You must be at least 13 years old. If you are under 18, you need permission from a parent or guardian.</p>
+
+      <h2>3. Your account</h2>
+      <ul>
+        <li>You sign in with Google. You are responsible for your account.</li>
+        <li>Your username is public, because it is part of your link, and it cannot be changed once claimed.</li>
+        <li>Do not impersonate other people or pick a username meant to deceive or offend.</li>
+      </ul>
+
+      <h2>4. What you must not send or do</h2>
+      <ul>
+        <li>Harassment, bullying, threats or encouragement of violence or self-harm.</li>
+        <li>Hate speech, slurs, or attacks on people for who they are.</li>
+        <li>Sexual or explicit content, or anything involving minors in a sexual way.</li>
+        <li>Sharing private information about someone (doxxing), blackmail, or scams.</li>
+        <li>Spam, illegal content, or trying to break, overload or bypass the service (including its limits and bans).</li>
+        <li>False reports. Reporting a message that does not break these rules is itself a violation.</li>
+      </ul>
+
+      <h2>5. Anonymity and what we store</h2>
+      <ul>
+        <li>The person who receives a message is never shown who sent it.</li>
+        <li>We store the message text, the receiver's username and a timestamp.</li>
+        <li>To limit spam and abuse, we store a one-way hash of the sender's network address. It is not the address itself, and only the site admin can see it. It is used for the send limit (one message per network every 3 hours) and for bans.</li>
+        <li>For account holders we store your Google account email (through Firebase Authentication), your username, and a hash of the network you last logged in from.</li>
+        <li>Anonymous does not mean untraceable. We may share information if the law requires it, or to protect someone from serious harm.</li>
+      </ul>
+
+      <h2>6. Reports, warnings and bans</h2>
+      <ul>
+        <li>You can report any message you receive. Reports and the reported message go to the admin.</li>
+        <li>The admin may ban a sender's network or account, or warn a user. Warnings are shown the next time you open incog.</li>
+        <li>Networks are sometimes shared (schools, workplaces, mobile carriers), so a ban may affect other people on the same network. Contact us if you think you were blocked by mistake.</li>
+        <li>Moderation decisions are made at the admin's discretion.</li>
+      </ul>
+
+      <h2>7. Services we rely on</h2>
+      <p>incog uses Google Firebase (login and database), Render (hosting), and third-party services to look up network addresses. Their own terms and privacy policies apply to their parts of the service.</p>
+
+      <h2>8. Ending your access</h2>
+      <p>We can suspend or remove accounts and block networks that break these terms. You can stop using incog at any time, and you can ask us to delete your account data using the contact below.</p>
+
+      <h2>9. No guarantees</h2>
+      <p>incog is a free service provided as is, with no promise that it will always be available or free of errors. We are not responsible for the content of messages sent by users. To the extent the law allows, we are not liable for losses caused by using the service.</p>
+
+      <h2>10. Changes</h2>
+      <p>We may update these terms. If you keep using incog after a change, you accept the new version.</p>
+
+      <h2>11. Contact</h2>
+      <p>Questions, appeals or deletion requests: <span class="text-fuchsia-300">gsitachi70i@gmail.com</span></p>
+    </article>
+  </main>
+</body>
+</html>

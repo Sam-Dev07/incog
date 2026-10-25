@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <!--
-  incog — AUTH + DASHBOARD (dashboard.html)
-  Flow:  sign up / log in  →  claim a unique username (once)  →  copy your link  →  read your inbox.
+  incog — AUTH + DASHBOARD (dashboard.html)  [Google sign-in version]
+  Flow:  Continue with Google  →  claim a unique username (once)  →  copy your link  →  read your inbox.
 
   REQUIRED one-time Firebase console setup:
-    1. Build → Authentication → Sign-in method → enable "Email/Password".
+    1. Build → Authentication → Sign-in method → enable "Google" (pick a support email, Save).
     2. Authentication → Settings → Authorized domains → add the domain you host on
-       (localhost is allowed by default).
-    3. Firestore → Rules → paste the contents of firestore.rules and Publish.
+       (e.g. incog-ycnh.onrender.com — hostname only, no https://).
+    3. Firestore → Rules → publish the rules from firestore.rules.
 -->
 <html lang="en">
 <head>
@@ -59,6 +59,9 @@
     .btn-glow:disabled { opacity: .5; cursor: not-allowed; }
     .btn-ghost { border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.03); transition: background .2s, border-color .2s; }
     .btn-ghost:hover { background: rgba(255,255,255,.07); border-color: rgba(217,70,239,.4); }
+    .btn-google { background: #fff; color: #1f1f1f; box-shadow: 0 10px 40px -10px rgba(168,85,247,.6); transition: transform .15s, box-shadow .2s, opacity .2s; }
+    .btn-google:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 50px -8px rgba(217,70,239,.8); }
+    .btn-google:disabled { opacity: .6; cursor: not-allowed; }
 
     .hidden-view { display: none !important; }
     .fade-in { animation: fadeIn .45s ease both; }
@@ -99,43 +102,26 @@
       <p class="mt-4 text-sm text-zinc-400">Authenticating…</p>
     </section>
 
-    <!-- ===================== AUTH (login / sign up) ===================== -->
-    <section id="view-auth" class="hidden-view glass rounded-3xl p-7 sm:p-9 fade-in">
-      <h1 id="auth-title" class="text-2xl font-extrabold">Welcome back</h1>
-      <p id="auth-sub" class="mt-1 text-sm text-zinc-400">Log in to read your anonymous inbox.</p>
+    <!-- ===================== AUTH (Google) ===================== -->
+    <section id="view-auth" class="hidden-view glass rounded-3xl p-7 sm:p-9 fade-in text-center">
+      <h1 class="text-2xl font-extrabold">Welcome to incog</h1>
+      <p class="mt-2 text-sm text-zinc-400">Sign in with Google to get your link and read your anonymous inbox.</p>
 
-      <form id="auth-form" class="mt-6 space-y-4">
-        <div>
-          <label class="text-xs text-zinc-400" for="email">Email</label>
-          <input id="email" type="email" required autocomplete="email" placeholder="you@domain.com"
-                 class="field mt-1 w-full rounded-xl px-4 py-3 text-sm placeholder-zinc-600" />
-        </div>
-        <div>
-          <label class="text-xs text-zinc-400" for="password">Password</label>
-          <input id="password" type="password" required minlength="6" autocomplete="current-password" placeholder="At least 6 characters"
-                 class="field mt-1 w-full rounded-xl px-4 py-3 text-sm placeholder-zinc-600" />
-        </div>
-        <p id="auth-error" class="hidden-view text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
-        <button id="auth-submit" type="submit" class="btn-glow w-full rounded-xl py-3 font-semibold text-white">Log in</button>
-      </form>
+      <button id="google-btn" type="button" class="btn-google mt-7 w-full rounded-xl py-3.5 font-semibold flex items-center justify-center gap-3">
+        <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        <span id="google-label">Continue with Google</span>
+      </button>
 
-      <div class="mt-5 flex items-center justify-between text-xs text-zinc-400">
-        <button id="auth-toggle" class="text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-4">New here? Create an account</button>
-        <button id="forgot-btn" class="hover:text-zinc-200">Forgot password?</button>
-      </div>
-    </section>
+      <p id="auth-error" class="hidden-view mt-4 text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
 
-    <!-- ===================== VERIFY EMAIL ===================== -->
-    <section id="view-verify" class="hidden-view glass rounded-3xl p-7 sm:p-9 fade-in text-center">
-      <div class="text-5xl">📧</div>
-      <h1 class="mt-4 text-2xl font-extrabold">Verify your email</h1>
-      <p class="mt-2 text-sm text-zinc-400">
-        We sent a verification link to<br />
-        <span id="verify-email" class="text-fuchsia-300 font-semibold break-all"></span>
+      <p class="mt-6 text-[11px] text-zinc-500">
+        Google is only used to log you in. People who message you stay completely anonymous.
       </p>
-      <p class="mt-3 text-xs text-zinc-500">Open the email and click the link. Check your spam folder if you don't see it.</p>
-      <button id="verify-done" class="btn-glow mt-6 w-full rounded-xl py-3 font-semibold text-white">I've verified — continue</button>
-      <button id="verify-resend" class="btn-ghost mt-3 w-full rounded-xl py-3 text-sm text-zinc-300">Resend email</button>
     </section>
 
     <!-- ===================== CLAIM USERNAME ===================== -->
@@ -197,7 +183,7 @@
         <ul id="inbox-list" class="mt-5 space-y-3"></ul>
       </section>
     </div>
-    <p class="mt-8 text-center text-[10px] text-zinc-600">build: verify-v4</p>
+    <p class="mt-8 text-center text-[10px] text-zinc-600">build: google-v1</p>
   </main>
 
   <!-- ===================================================================== -->
@@ -206,11 +192,11 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
     import {
-      getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
-      signInWithEmailAndPassword, signOut, sendPasswordResetEmail, sendEmailVerification
+      getAuth, onAuthStateChanged, GoogleAuthProvider,
+      signInWithPopup, signInWithRedirect, signOut
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import {
-      getFirestore, doc, getDoc, setDoc, runTransaction, serverTimestamp,
+      getFirestore, doc, getDoc, runTransaction, serverTimestamp,
       collection, query, where, onSnapshot
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -232,7 +218,7 @@
     const $ = (id) => document.getElementById(id);
     const hide = (el) => el.classList.add("hidden-view");
     const reveal = (el) => el.classList.remove("hidden-view");
-    const VIEWS = ["loading", "auth", "verify", "claim", "dash"];
+    const VIEWS = ["loading", "auth", "claim", "dash"];
     function showView(name) {
       VIEWS.forEach(v => (v === name ? reveal : hide)($("view-" + v)));
       (name === "auth" || name === "loading" ? hide : reveal)($("signout-btn"));
@@ -249,90 +235,46 @@
 
     function friendlyAuthError(code) {
       const map = {
-        "auth/invalid-email": "That email address doesn't look right.",
-        "auth/missing-password": "Please enter a password.",
-        "auth/weak-password": "Password must be at least 6 characters.",
-        "auth/email-already-in-use": "An account with this email already exists. Try logging in.",
-        "auth/invalid-credential": "Wrong email or password.",
-        "auth/user-not-found": "Wrong email or password.",
-        "auth/wrong-password": "Wrong email or password.",
-        "auth/too-many-requests": "Too many attempts. Wait a bit and try again.",
-        "auth/operation-not-allowed": "Email/Password sign-in isn't enabled in the Firebase console yet.",
-        "auth/network-request-failed": "Network error. Check your connection."
+        "auth/popup-closed-by-user": "Sign-in window was closed. Try again.",
+        "auth/cancelled-popup-request": "Sign-in was cancelled. Try again.",
+        "auth/unauthorized-domain": "This website address isn't authorized in Firebase yet (Authentication → Settings → Authorized domains).",
+        "auth/operation-not-allowed": "Google sign-in isn't enabled in the Firebase console yet.",
+        "auth/network-request-failed": "Network error. Check your connection.",
+        "auth/too-many-requests": "Too many attempts. Wait a bit and try again."
       };
-      return map[code] || "Something went wrong. Please try again.";
+      return (map[code] || "Couldn't sign in with Google.") + " (" + code + ")";
     }
 
     // =====================================================================
-    // 1) AUTH: sign up / log in toggle
+    // 1) AUTH: Continue with Google
     // =====================================================================
-    // dashboard.html?mode=signup opens straight on the sign-up form
-    let mode = new URLSearchParams(window.location.search).get("mode") === "signup" ? "signup" : "login";
-
-    function renderAuthMode() {
-      const signup = mode === "signup";
-      $("auth-title").textContent  = signup ? "Create your account" : "Welcome back";
-      $("auth-sub").textContent    = signup ? "Free forever. No tracking." : "Log in to read your anonymous inbox.";
-      $("auth-submit").textContent = signup ? "Sign up" : "Log in";
-      $("auth-toggle").textContent = signup ? "Already have an account? Log in" : "New here? Create an account";
-      $("password").autocomplete   = signup ? "new-password" : "current-password";
-      hide($("auth-error"));
-    }
-    $("auth-toggle").addEventListener("click", () => { mode = mode === "login" ? "signup" : "login"; renderAuthMode(); });
-
-    $("auth-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const btn = $("auth-submit"), errEl = $("auth-error");
+    $("google-btn").addEventListener("click", async () => {
+      const btn = $("google-btn"), errEl = $("auth-error");
       hide(errEl);
       btn.disabled = true;
-      const email = $("email").value.trim(), pw = $("password").value;
+      $("google-label").textContent = "Opening Google…";
+
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+
       try {
-        if (mode === "signup") {
-          const cred = await createUserWithEmailAndPassword(auth, email, pw);
-          // Send the verification link right after the account is created
-          try { await sendEmailVerification(cred.user); } catch (e) { console.error(e); }
-        } else {
-          await signInWithEmailAndPassword(auth, email, pw);
-        }
+        await signInWithPopup(auth, provider);
         // onAuthStateChanged takes over from here
       } catch (err) {
-        errEl.textContent = friendlyAuthError(err.code);
+        console.error(err);
+        // Popup blocked (common on phones / in-app browsers) -> fall back to full-page redirect
+        if (err.code === "auth/popup-blocked" || err.code === "auth/operation-not-supported-in-this-environment") {
+          try { await signInWithRedirect(auth, provider); return; } catch (e2) { err = e2; }
+        }
+        errEl.textContent = friendlyAuthError(err.code || "unknown");
         reveal(errEl);
       } finally {
         btn.disabled = false;
+        $("google-label").textContent = "Continue with Google";
       }
-    });
-
-    $("forgot-btn").addEventListener("click", async () => {
-      const email = $("email").value.trim();
-      if (!email) { toast("Enter your email first, then tap “Forgot password?”"); return; }
-      try { await sendPasswordResetEmail(auth, email); toast("Reset link sent — check your inbox."); }
-      catch (err) { toast(friendlyAuthError(err.code)); }
     });
 
     $("signout-btn").addEventListener("click", () => signOut(auth));
-
-    // ---- Email verification screen buttons ----
-    $("verify-resend").addEventListener("click", async () => {
-      try {
-        await sendEmailVerification(auth.currentUser);
-        toast("Verification email sent — check inbox and spam.");
-      } catch (err) {
-        toast(err.code === "auth/too-many-requests" ? "Wait a minute before resending." : "Couldn't send the email. Try again.");
-      }
-    });
-
-    $("verify-done").addEventListener("click", async () => {
-      const u = auth.currentUser;
-      if (!u) return;
-      await u.reload();
-      if (u.emailVerified) {
-        await u.getIdToken(true); // refresh token so Firestore sees email_verified = true
-        window.location.reload();
-      } else {
-        toast("Not verified yet — click the link in the email first.");
-      }
-    });
 
     // =====================================================================
     // 2) USERNAME CLAIM (unique, permanent)
@@ -359,11 +301,6 @@
       btn.textContent = "Claiming…";
 
       try {
-        // Refresh the login token so Firestore sees the latest email_verified status
-        await user.reload();
-        if (!user.emailVerified) throw new Error("EMAIL-NOT-VERIFIED");
-        await user.getIdToken(true);
-
         await runTransaction(db, async (tx) => {
           const nameRef = doc(db, "usernames", name);
           const userRef = doc(db, "users", user.uid);
@@ -392,9 +329,8 @@
 
     function buildLink(username) {
       // Resolves index.html relative to wherever dashboard.html is hosted
-      // (works on a domain root, a sub-folder, or localhost).
       const u = new URL("index.html", window.location.href);
-      u.search = "";           // clear any params inherited from this page
+      u.search = "";
       u.hash = "";
       u.searchParams.set("user", username);
       return u.toString();     // => [current-domain]/index.html?user=USERNAME
@@ -403,7 +339,6 @@
     async function copyText(text) {
       try { await navigator.clipboard.writeText(text); return true; }
       catch (_) {
-        // Fallback for older browsers / non-secure contexts
         const ta = document.createElement("textarea");
         ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
         document.body.appendChild(ta); ta.select();
@@ -423,7 +358,6 @@
     });
 
     function fmtTime(ts) {
-      // serverTimestamp() is null for a split second on local writes; handle it.
       if (!ts || !ts.toDate) return "just now";
       const d = ts.toDate();
       const diff = (Date.now() - d.getTime()) / 1000;
@@ -470,12 +404,11 @@
       hide($("inbox-error"));
 
       // Only drops addressed to THIS user. Firestore rules enforce this server-side too.
-      // Sorting is done client-side so you don't need to create a composite index.
+      // Sorting is done client-side so you don't need a composite index.
       const q = query(collection(db, "anonymous_drops"), where("receiverUsername", "==", username));
 
       unsubscribeInbox = onSnapshot(q, (snap) => {
         const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        // timestamp DESC (pending server timestamps = newest)
         items.sort((a, b) => {
           const ta = a.timestamp?.toMillis ? a.timestamp.toMillis() : Number.MAX_SAFE_INTEGER;
           const tb = b.timestamp?.toMillis ? b.timestamp.toMillis() : Number.MAX_SAFE_INTEGER;
@@ -509,15 +442,7 @@
 
       if (!user) {
         currentUsername = null;
-        renderAuthMode();
         showView("auth");
-        return;
-      }
-
-      // Block everything until the email is verified
-      if (!user.emailVerified) {
-        $("verify-email").textContent = user.email;
-        showView("verify");
         return;
       }
 

@@ -84,6 +84,33 @@
   <div id="toast" class="fixed z-50 top-5 left-1/2 -translate-x-1/2 -translate-y-4 opacity-0 pointer-events-none
        px-4 py-2.5 rounded-xl text-sm font-medium bg-black/80 border border-fuchsia-400/40 text-fuchsia-100 backdrop-blur"></div>
 
+  <!-- ===================== REPORT MODAL ===================== -->
+  <div id="report-modal" class="hidden-view fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div class="glass rounded-3xl w-full max-w-sm p-6 fade-in">
+      <div class="flex items-center gap-2 text-rose-400">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 2a1 1 0 0 1 1 1v1h11.2a1 1 0 0 1 .8 1.6L15.5 9l2.5 3.4a1 1 0 0 1-.8 1.6H6v8a1 1 0 1 1-2 0V3a1 1 0 0 1 1-1z"/></svg>
+        <h3 class="text-lg font-extrabold text-zinc-100">Report this message</h3>
+      </div>
+      <p class="mt-1 text-sm text-zinc-400">What's wrong with it? Reports are anonymous to the sender and go to the admins.</p>
+      <div id="report-options" class="mt-4 space-y-2"></div>
+      <p id="report-error" class="hidden-view mt-3 text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2">Couldn't send the report. Please try again.</p>
+      <div class="mt-5 flex gap-3">
+        <button id="report-cancel" type="button" class="btn-ghost flex-1 rounded-xl py-2.5 text-sm text-zinc-300">Cancel</button>
+        <button id="report-done" type="button" disabled class="btn-glow flex-1 rounded-xl py-2.5 text-sm font-semibold text-white">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ADMIN WARNING POPUP ===================== -->
+  <div id="warn-modal" class="hidden-view fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div class="glass rounded-3xl w-full max-w-sm p-7 text-center fade-in" style="border-color: rgba(251,191,36,.35)">
+      <div class="text-5xl">⚠️</div>
+      <h3 class="mt-3 text-xl font-extrabold">Warning from the admins</h3>
+      <p id="warn-text" class="mt-3 text-sm leading-relaxed text-zinc-300"></p>
+      <button id="warn-ok" type="button" class="btn-glow mt-6 w-full rounded-xl py-3 font-semibold text-white">I understand</button>
+    </div>
+  </div>
+
   <main class="relative z-10 mx-auto w-full max-w-2xl px-4 py-8 sm:py-12">
 
     <!-- Brand -->
@@ -183,7 +210,7 @@
         <ul id="inbox-list" class="mt-5 space-y-3"></ul>
       </section>
     </div>
-    <p class="mt-8 text-center text-[10px] text-zinc-600">build: google-v1</p>
+    <p class="mt-8 text-center text-[10px] text-zinc-600">build: mod-v1</p>
   </main>
 
   <!-- ===================================================================== -->
@@ -196,7 +223,7 @@
       signInWithPopup, signInWithRedirect, signOut
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import {
-      getFirestore, doc, getDoc, runTransaction, serverTimestamp,
+      getFirestore, doc, getDoc, setDoc, updateDoc, runTransaction, serverTimestamp,
       collection, query, where, onSnapshot
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -213,6 +240,43 @@
     const app  = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
+
+    // The admin account is sent to admin.html after login (real protection is in firestore.rules)
+    const ADMIN_EMAIL = "gsitachi70i@gmail.com";
+
+    // ------------------------------------------------------------------
+    // Network hash helpers (abuse protection). Raw address is never stored.
+    // ------------------------------------------------------------------
+    async function fetchIp() {
+      const attempts = [
+        async () => (await (await fetch("https://api.ipify.org?format=json", { cache: "no-store" })).json()).ip,
+        async () => {
+          const t = await (await fetch("https://www.cloudflare.com/cdn-cgi/trace", { cache: "no-store" })).text();
+          const m = t.match(/^ip=(.+)$/m);
+          return m && m[1].trim();
+        }
+      ];
+      for (const attempt of attempts) {
+        try { const ip = await attempt(); if (ip) return ip; } catch (_) { /* try next */ }
+      }
+      throw new Error("ip-lookup-failed");
+    }
+    function expandV6(ip) {
+      ip = ip.split("%")[0];
+      const parts = ip.split("::");
+      const head = parts[0] ? parts[0].split(":") : [];
+      if (parts.length === 1) return head.map(x => x.padStart(4, "0")).join(":");
+      const tail = parts[1] ? parts[1].split(":") : [];
+      const fill = Array(Math.max(0, 8 - head.length - tail.length)).fill("0");
+      return [...head, ...fill, ...tail].map(x => x.padStart(4, "0")).join(":");
+    }
+    async function getIpHash() {
+      let ip = await fetchIp();
+      if (ip.includes(":")) ip = expandV6(ip).split(":").slice(0, 4).join(":");   // IPv6: /64 prefix
+      const bytes = new TextEncoder().encode("incog-v1|" + ip);
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+    }
 
     // ---- Tiny DOM helpers ----
     const $ = (id) => document.getElementById(id);
@@ -326,6 +390,10 @@
     // =====================================================================
     let currentUsername = null;
     let unsubscribeInbox = null;
+    let unsubscribeReports = null;
+    let lastItems = [];               // latest inbox messages (for re-rendering)
+    const reportedIds = new Set();    // message ids this user has already reported
+    let blockedNotice = false;        // show "blocked" text after a forced sign-out
 
     function buildLink(username) {
       // Resolves index.html relative to wherever dashboard.html is hosted
@@ -387,7 +455,21 @@
         const when = document.createElement("span");
         when.className = "text-zinc-500 normal-case tracking-normal";
         when.textContent = fmtTime(it.timestamp);
-        top.append(who, when);
+        // Red flag (report) button, top-right of each message
+        const reported = reportedIds.has(it.id);
+        const flagBtn = document.createElement("button");
+        flagBtn.type = "button";
+        flagBtn.title = reported ? "Reported" : "Report this message";
+        flagBtn.setAttribute("aria-label", flagBtn.title);
+        flagBtn.className = "rounded-lg p-1.5 transition " +
+          (reported ? "text-rose-500 opacity-70 cursor-default" : "text-rose-400 hover:bg-rose-500/10 hover:text-rose-300");
+        flagBtn.innerHTML = flagSvg(reported);   // static icon markup, no user data
+        if (!reported) flagBtn.addEventListener("click", () => openReport(it));
+
+        const right = document.createElement("div");
+        right.className = "flex items-center gap-1.5";
+        right.append(when, flagBtn);
+        top.append(who, right);
 
         // textContent (never innerHTML) => senders can't inject HTML/scripts
         const body = document.createElement("p");
@@ -414,6 +496,7 @@
           const tb = b.timestamp?.toMillis ? b.timestamp.toMillis() : Number.MAX_SAFE_INTEGER;
           return tb - ta;
         });
+        lastItems = items;
         renderInbox(items);
       }, (err) => {
         console.error(err);
@@ -432,21 +515,164 @@
       hide($("link-box"));
       showView("dash");
       startInbox(username);
+      startReports(user.uid);
     }
 
     // =====================================================================
-    // 4) AUTH STATE ROUTER
+    // 4) REPORTS (red flag on messages) + ADMIN WARNING POPUP
+    // =====================================================================
+    const REASONS = [
+      "Harassment or bullying",
+      "Hate speech",
+      "Sexual content",
+      "Threats or violence",
+      "Spam or scam",
+      "Something else"
+    ];
+
+    function flagSvg(filled) {
+      return '<svg width="18" height="18" viewBox="0 0 24 24" fill="' + (filled ? "currentColor" : "none") +
+             '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+             '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/></svg>';
+    }
+
+    let reportTarget = null, reportReason = null;
+
+    function openReport(item) {
+      reportTarget = item;
+      reportReason = null;
+      hide($("report-error"));
+      const done = $("report-done");
+      done.disabled = true;
+      done.textContent = "Done";
+
+      const box = $("report-options");
+      box.replaceChildren();
+      REASONS.forEach((r) => {
+        const label = document.createElement("label");
+        label.className = "flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-sm cursor-pointer hover:border-fuchsia-400/40";
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = "report-reason";
+        input.className = "accent-fuchsia-500";
+        input.addEventListener("change", () => { reportReason = r; $("report-done").disabled = false; });
+        const span = document.createElement("span");
+        span.textContent = r;
+        label.append(input, span);
+        box.appendChild(label);
+      });
+      reveal($("report-modal"));
+    }
+
+    function closeReport() {
+      hide($("report-modal"));
+      reportTarget = null;
+      reportReason = null;
+    }
+
+    $("report-cancel").addEventListener("click", closeReport);
+
+    $("report-done").addEventListener("click", async () => {
+      const user = auth.currentUser;
+      if (!user || !reportTarget || !reportReason) return;
+      const btn = $("report-done");
+      btn.disabled = true;
+      btn.textContent = "Sending…";
+      try {
+        // One report per message (document id = message id)
+        await setDoc(doc(db, "reports", reportTarget.id), {
+          dropId: reportTarget.id,
+          messageText: reportTarget.messageText,
+          reason: reportReason,
+          reporterUid: user.uid,
+          reporterUsername: currentUsername,
+          status: "open",
+          createdAt: serverTimestamp()
+        });
+        closeReport();
+        toast("Report sent to the admins. Thank you.");
+      } catch (err) {
+        console.error(err);
+        reveal($("report-error"));
+        btn.disabled = false;
+        btn.textContent = "Done";
+      }
+    });
+
+    // Remember which messages were already reported (shows a filled flag)
+    function startReports(uid) {
+      if (unsubscribeReports) unsubscribeReports();
+      const q = query(collection(db, "reports"), where("reporterUid", "==", uid));
+      unsubscribeReports = onSnapshot(q, (snap) => {
+        reportedIds.clear();
+        snap.docs.forEach(d => reportedIds.add(d.id));
+        renderInbox(lastItems);
+      }, (err) => console.error(err));
+    }
+
+    // Popup shown until the user clicks "I understand"
+    async function checkWarning(user) {
+      try {
+        const snap = await getDoc(doc(db, "warnings", user.uid));
+        if (snap.exists() && snap.data().acknowledged === false) {
+          $("warn-text").textContent = snap.data().message || "You have received a warning from the admins.";
+          reveal($("warn-modal"));
+          $("warn-ok").onclick = async () => {
+            hide($("warn-modal"));
+            try { await updateDoc(doc(db, "warnings", user.uid), { acknowledged: true }); }
+            catch (e) { console.error(e); }
+          };
+        }
+      } catch (err) { console.error(err); }
+    }
+
+    // =====================================================================
+    // 5) AUTH STATE ROUTER
     // =====================================================================
     onAuthStateChanged(auth, async (user) => {
       if (unsubscribeInbox) { unsubscribeInbox(); unsubscribeInbox = null; }
+      if (unsubscribeReports) { unsubscribeReports(); unsubscribeReports = null; }
 
       if (!user) {
         currentUsername = null;
         showView("auth");
+        if (blockedNotice) {
+          const el = $("auth-error");
+          el.textContent = "This account or network has been blocked from incog.";
+          reveal(el);
+        }
         return;
       }
 
       showView("loading");
+
+      // The admin account goes straight to the admin panel (add ?me=1 to see the normal dashboard)
+      if ((user.email || "").toLowerCase() === ADMIN_EMAIL && !new URLSearchParams(window.location.search).has("me")) {
+        window.location.replace("admin.html");
+        return;
+      }
+
+      // Ban checks + remember this login's network hash (only the admin can read it)
+      try {
+        const ipHash = await getIpHash();
+        const [bIp, bUid] = await Promise.all([
+          getDoc(doc(db, "banned_ips", ipHash)),
+          getDoc(doc(db, "banned_uids", user.uid))
+        ]);
+        if (bIp.exists() || bUid.exists()) {
+          blockedNotice = true;
+          await signOut(auth);
+          return;
+        }
+        blockedNotice = false;
+        await setDoc(doc(db, "user_meta", user.uid), { ipHash, lastSeen: serverTimestamp() });
+      } catch (err) {
+        // If the network lookup fails we don't lock people out of their own inbox
+        console.error(err);
+      }
+
+      checkWarning(user);   // admin warning popup (not awaited)
+
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists() && snap.data().username) await enterDashboard(user, snap.data().username);

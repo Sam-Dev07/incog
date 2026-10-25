@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<!--
+  incog — ADMIN PANEL (admin.html)
+  Only the Google account gsitachi70i@gmail.com can use this. The page check below is only
+  cosmetic — the REAL protection is in firestore.rules (isAdmin()).
+
+  What it does:
+   - Shows open reports (message text, reason, who reported it)
+       🔨  bans the SENDER's network (so they can't send any more messages)
+       ❗  warns the REPORTER (fake report) — they see a popup next time they open incog
+   - Direct ban by username
+   - List of bans, with Unban
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>incog — admin</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" href="logo.png" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; background: #07060d; color: #e9e6f5; min-height: 100vh; overflow-x: hidden; }
+    .grid-bg {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(168,85,247,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(168,85,247,.06) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(ellipse at top, #000 20%, transparent 75%);
+      -webkit-mask-image: radial-gradient(ellipse at top, #000 20%, transparent 75%);
+    }
+    .orb { position: fixed; border-radius: 9999px; filter: blur(120px); z-index: 0; pointer-events: none; opacity: .45; }
+    .orb-a { width: 420px; height: 420px; background: #7c3aed; top: -150px; left: -120px; }
+    .orb-b { width: 380px; height: 380px; background: #be123c; bottom: -160px; right: -100px; }
+    .glass {
+      background: linear-gradient(145deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.09);
+      backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+      box-shadow: 0 0 0 1px rgba(168,85,247,.07), 0 30px 80px -25px rgba(124,58,237,.4), inset 0 1px 0 rgba(255,255,255,.07);
+    }
+    .field { background: rgba(8,6,16,.65); border: 1px solid rgba(255,255,255,.1); transition: border-color .2s, box-shadow .2s; }
+    .field:focus { outline: none; border-color: rgba(217,70,239,.75); box-shadow: 0 0 0 4px rgba(217,70,239,.14); }
+    .btn-glow { background: linear-gradient(90deg, #7c3aed, #c026d3); box-shadow: 0 10px 40px -8px rgba(192,38,211,.65); transition: transform .15s, opacity .2s; }
+    .btn-glow:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn-glow:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-ghost { border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.03); transition: background .2s, border-color .2s; }
+    .btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,.07); border-color: rgba(217,70,239,.4); }
+    .btn-ghost:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-google { background: #fff; color: #1f1f1f; }
+    .btn-google:disabled { opacity: .6; cursor: not-allowed; }
+    .hidden-view { display: none !important; }
+    .fade-in { animation: fadeIn .4s ease both; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    #toast { transition: opacity .3s, transform .3s; }
+  </style>
+</head>
+
+<body class="relative">
+  <div class="grid-bg"></div>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+
+  <div id="toast" class="fixed z-50 top-5 left-1/2 -translate-x-1/2 -translate-y-4 opacity-0 pointer-events-none max-w-[92vw] text-center
+       px-4 py-2.5 rounded-xl text-sm font-medium bg-black/85 border border-fuchsia-400/40 text-fuchsia-100 backdrop-blur"></div>
+
+  <main class="relative z-10 mx-auto w-full max-w-3xl px-4 py-8 sm:py-12">
+
+    <header class="flex items-center justify-between mb-8 gap-3">
+      <div class="flex items-center gap-3">
+        <img src="logo.png" alt="" class="h-9 w-9 rounded-full object-cover ring-2 ring-fuchsia-500/50" onerror="this.style.display='none'" />
+        <span class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">incog</span>
+        <span class="text-[10px] font-bold tracking-widest px-2 py-1 rounded-md bg-rose-500/15 text-rose-300 border border-rose-400/20">ADMIN</span>
+      </div>
+      <div id="header-actions" class="hidden-view flex items-center gap-2">
+        <a href="dashboard.html?me=1" class="btn-ghost rounded-xl px-3.5 py-2 text-xs text-zinc-300">My inbox</a>
+        <button id="signout-btn" class="btn-ghost rounded-xl px-3.5 py-2 text-xs text-zinc-300">Sign out</button>
+      </div>
+    </header>
+
+    <!-- LOADING -->
+    <section id="view-loading" class="glass rounded-3xl p-12 text-center">
+      <div class="mx-auto h-10 w-10 rounded-full border-2 border-fuchsia-500/30 border-t-fuchsia-400 animate-spin"></div>
+      <p class="mt-4 text-sm text-zinc-400">Checking access…</p>
+    </section>
+
+    <!-- SIGN IN -->
+    <section id="view-signin" class="hidden-view glass rounded-3xl p-8 text-center fade-in">
+      <h1 class="text-2xl font-extrabold">Admin sign-in</h1>
+      <p class="mt-2 text-sm text-zinc-400">Sign in with the admin Google account.</p>
+      <button id="google-btn" class="btn-google mt-6 w-full rounded-xl py-3.5 font-semibold">Continue with Google</button>
+      <p id="signin-error" class="hidden-view mt-4 text-sm text-rose-300"></p>
+    </section>
+
+    <!-- DENIED -->
+    <section id="view-denied" class="hidden-view glass rounded-3xl p-8 text-center fade-in">
+      <div class="text-4xl">⛔</div>
+      <h1 class="mt-3 text-xl font-extrabold">Not authorized</h1>
+      <p class="mt-2 text-sm text-zinc-400">This account doesn't have access to the admin panel.</p>
+      <div class="mt-6 flex gap-3 justify-center">
+        <button id="denied-signout" class="btn-ghost rounded-xl px-4 py-2.5 text-sm">Sign out</button>
+        <a href="dashboard.html?me=1" class="btn-ghost rounded-xl px-4 py-2.5 text-sm">Go to dashboard</a>
+      </div>
+    </section>
+
+    <!-- PANEL -->
+    <div id="view-panel" class="hidden-view space-y-6 fade-in">
+
+      <p id="panel-error" class="hidden-view text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
+
+      <!-- Reports -->
+      <section class="glass rounded-3xl p-6 sm:p-7">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-extrabold">Open reports</h2>
+          <span id="reports-count" class="text-xs font-mono px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-200 border border-rose-400/20">0</span>
+        </div>
+        <p class="mt-1 text-xs text-zinc-500">🔨 bans the sender's network · ❗ warns the reporter for a fake report</p>
+
+        <div id="reports-empty" class="mt-8 mb-3 text-center">
+          <div class="text-4xl">✅</div>
+          <p class="mt-3 text-sm text-zinc-400">No open reports.</p>
+        </div>
+        <ul id="reports-list" class="mt-5 space-y-3"></ul>
+      </section>
+
+      <!-- Direct ban -->
+      <section class="glass rounded-3xl p-6 sm:p-7">
+        <h2 class="text-lg font-extrabold">Direct ban</h2>
+        <p class="mt-1 text-xs text-zinc-500">Enter a username. Their account and the network they last logged in from are blocked.</p>
+        <form id="direct-form" class="mt-4 flex gap-3">
+          <div class="relative flex-1">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">@</span>
+            <input id="direct-input" type="text" required maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="username"
+                   class="field w-full rounded-xl pl-9 pr-4 py-3 text-sm placeholder-zinc-600" />
+          </div>
+          <button id="direct-btn" type="submit" class="btn-glow rounded-xl px-5 text-sm font-semibold text-white">🔨 Ban</button>
+        </form>
+        <p id="direct-msg" class="hidden-view mt-3 text-sm"></p>
+      </section>
+
+      <!-- Bans list -->
+      <section class="glass rounded-3xl p-6 sm:p-7">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-extrabold">Active bans</h2>
+          <span id="bans-count" class="text-xs font-mono px-2.5 py-1 rounded-full bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-400/20">0</span>
+        </div>
+        <p class="mt-1 text-xs text-zinc-500">Networks can be shared (schools, mobile carriers), so unban if you suspect an innocent person was caught.</p>
+        <p id="bans-empty" class="mt-5 text-sm text-zinc-500">No active bans.</p>
+        <ul id="bans-list" class="mt-4 space-y-2"></ul>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import {
+      getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import {
+      getFirestore, doc, getDoc, deleteDoc, writeBatch, serverTimestamp,
+      collection, query, where, onSnapshot
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCBP4dP0fec0viULN0YQdCTSLH_HS-Br7A",
+      authDomain: "incog-e20b7.firebaseapp.com",
+      projectId: "incog-e20b7",
+      storageBucket: "incog-e20b7.firebasestorage.app",
+      messagingSenderId: "741424835690",
+      appId: "1:741424835690:web:70b49cf67ae141e1882e13",
+      measurementId: "G-E8YV6TGP6L"
+    };
+    const app  = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    const ADMIN_EMAIL = "gsitachi70i@gmail.com";
+    const WARN_TEXT = "The admins reviewed your report and believe it was a fake report with no real reason to take action against the person who sent the message. This is a warning: if more reports like this come from your account, you can be banned.";
+    const NAME_RE = /^[a-z0-9_]{3,20}$/;
+
+    // ---- helpers ----
+    const $ = (id) => document.getElementById(id);
+    const hide = (el) => el.classList.add("hidden-view");
+    const reveal = (el) => el.classList.remove("hidden-view");
+    const VIEWS = ["loading", "signin", "denied", "panel"];
+    function showView(name) {
+      VIEWS.forEach(v => (v === name ? reveal : hide)($("view-" + v)));
+      (name === "panel" || name === "denied" ? reveal : hide)($("header-actions"));
+    }
+
+    let toastTimer;
+    function toast(msg) {
+      const t = $("toast");
+      t.textContent = msg;
+      t.style.opacity = "1"; t.style.transform = "translate(-50%, 0)";
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.style.opacity = "0"; t.style.transform = "translate(-50%, -16px)"; }, 3200);
+    }
+
+    function fmtTime(ts) {
+      if (!ts || !ts.toDate) return "just now";
+      const d = ts.toDate();
+      const diff = (Date.now() - d.getTime()) / 1000;
+      if (diff < 60)    return "just now";
+      if (diff < 3600)  return Math.floor(diff / 60) + "m ago";
+      if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " · " +
+             d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    }
+
+    // ---- sign in / out ----
+    $("google-btn").addEventListener("click", async () => {
+      const btn = $("google-btn"), err = $("signin-error");
+      hide(err); btn.disabled = true;
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      try { await signInWithPopup(auth, provider); }
+      catch (e) {
+        console.error(e);
+        if (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment") {
+          try { await signInWithRedirect(auth, provider); return; } catch (e2) { e = e2; }
+        }
+        err.textContent = "Couldn't sign in (" + (e.code || "unknown") + ")";
+        reveal(err);
+      } finally { btn.disabled = false; }
+    });
+    $("signout-btn").addEventListener("click", () => signOut(auth));
+    $("denied-signout").addEventListener("click", () => signOut(auth));
+
+    // ---- live data ----
+    let unsubs = [];
+    let bannedIps = [], bannedUids = [];
+
+    function stopPanel() { unsubs.forEach(u => u()); unsubs = []; }
+
+    function panelError(err) {
+      console.error(err);
+      const el = $("panel-error");
+      el.textContent = err.code === "permission-denied"
+        ? "Permission denied. Publish the latest firestore.rules in the Firebase console."
+        : "Something went wrong loading data (" + (err.code || err.message) + ").";
+      reveal(el);
+    }
+
+    function startPanel() {
+      stopPanel();
+      hide($("panel-error"));
+
+      unsubs.push(onSnapshot(query(collection(db, "reports"), where("status", "==", "open")), (snap) => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        renderReports(list);
+      }, panelError));
+
+      unsubs.push(onSnapshot(collection(db, "banned_ips"), (snap) => {
+        bannedIps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderBans();
+      }, panelError));
+
+      unsubs.push(onSnapshot(collection(db, "banned_uids"), (snap) => {
+        bannedUids = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderBans();
+      }, panelError));
+    }
+
+    // ---- reports ----
+    function mkBtn(label, cls, onClick) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "rounded-xl px-3.5 py-2 text-sm font-semibold transition " + cls;
+      b.textContent = label;
+      b.addEventListener("click", () => onClick(b));
+      return b;
+    }
+
+    function renderReports(list) {
+      const ul = $("reports-list");
+      ul.replaceChildren();
+      $("reports-count").textContent = list.length;
+      (list.length ? hide : reveal)($("reports-empty"));
+
+      list.forEach((r) => {
+        const li = document.createElement("li");
+        li.className = "rounded-2xl border border-white/10 bg-black/30 p-4 fade-in";
+
+        const top = document.createElement("div");
+        top.className = "flex items-center justify-between gap-2";
+        const chip = document.createElement("span");
+        chip.className = "text-[11px] font-semibold px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-300 border border-rose-400/20";
+        chip.textContent = r.reason || "Report";
+        const when = document.createElement("span");
+        when.className = "text-xs text-zinc-500";
+        when.textContent = fmtTime(r.createdAt);
+        top.append(chip, when);
+
+        // Message text via textContent so nothing in it can run as HTML
+        const msg = document.createElement("p");
+        msg.className = "mt-3 text-[15px] leading-relaxed text-zinc-100 whitespace-pre-wrap break-words rounded-xl bg-white/[.03] border border-white/5 px-3.5 py-3";
+        msg.textContent = r.messageText;
+
+        const by = document.createElement("p");
+        by.className = "mt-3 text-xs text-zinc-400";
+        by.textContent = "Reported by @" + (r.reporterUsername || "unknown");
+        const warned = document.createElement("span");
+        warned.className = "text-amber-300";
+        by.appendChild(warned);
+        getDoc(doc(db, "warnings", r.reporterUid)).then(s => {
+          const c = s.exists() ? (s.data().count || 0) : 0;
+          if (c > 0) warned.textContent = " · warned " + c + "×";
+        }).catch(() => {});
+
+        const actions = document.createElement("div");
+        actions.className = "mt-4 flex flex-wrap gap-2";
+        actions.append(
+          mkBtn("🔨 Ban sender", "bg-rose-600/80 hover:bg-rose-600 text-white", (b) => banSender(r, b)),
+          mkBtn("❗ Warn reporter", "bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-400/30", (b) => warnReporter(r, b)),
+          mkBtn("Dismiss", "btn-ghost text-zinc-300", (b) => dismiss(r, b))
+        );
+
+        li.append(top, msg, by, actions);
+        ul.appendChild(li);
+      });
+    }
+
+    async function banSender(r, btn) {
+      if (!confirm("Ban this sender?\n\nTheir network will be blocked from sending messages (anyone on the same network too).")) return;
+      btn.disabled = true;
+      try {
+        const meta = await getDoc(doc(db, "drop_meta", r.id));
+        if (!meta.exists()) {
+          toast("No network info for this message (it was sent before network checks existed). Can't ban.");
+          btn.disabled = false;
+          return;
+        }
+        const batch = writeBatch(db);
+        batch.set(doc(db, "banned_ips", meta.data().ipHash), {
+          source: "report", reason: r.reason || "", dropId: r.id, bannedAt: serverTimestamp()
+        });
+        batch.update(doc(db, "reports", r.id), { status: "banned", resolvedAt: serverTimestamp() });
+        await batch.commit();
+        toast("Sender's network banned.");
+      } catch (err) {
+        console.error(err);
+        toast("Couldn't ban (" + (err.code || err.message) + ")");
+        btn.disabled = false;
+      }
+    }
+
+    async function warnReporter(r, btn) {
+      if (!confirm("Warn @" + (r.reporterUsername || "this user") + " for a fake report?\n\nThey will see a warning popup next time they open incog.")) return;
+      btn.disabled = true;
+      try {
+        const wref = doc(db, "warnings", r.reporterUid);
+        const prev = await getDoc(wref);
+        const count = (prev.exists() ? (prev.data().count || 0) : 0) + 1;
+        const batch = writeBatch(db);
+        batch.set(wref, { message: WARN_TEXT, count, acknowledged: false, createdAt: serverTimestamp() });
+        batch.update(doc(db, "reports", r.id), { status: "warned", resolvedAt: serverTimestamp() });
+        await batch.commit();
+        toast("Warning sent to @" + (r.reporterUsername || "user") + ".");
+      } catch (err) {
+        console.error(err);
+        toast("Couldn't warn (" + (err.code || err.message) + ")");
+        btn.disabled = false;
+      }
+    }
+
+    async function dismiss(r, btn) {
+      btn.disabled = true;
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, "reports", r.id), { status: "dismissed", resolvedAt: serverTimestamp() });
+        await batch.commit();
+        toast("Report dismissed.");
+      } catch (err) {
+        console.error(err);
+        toast("Couldn't dismiss (" + (err.code || err.message) + ")");
+        btn.disabled = false;
+      }
+    }
+
+    // ---- direct ban ----
+    function directMsg(text, ok) {
+      const el = $("direct-msg");
+      el.textContent = text;
+      el.className = "mt-3 text-sm " + (ok ? "text-emerald-300" : "text-rose-300");
+      reveal(el);
+    }
+
+    $("direct-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = $("direct-btn");
+      hide($("direct-msg"));
+      const name = $("direct-input").value.trim().toLowerCase().replace(/^@/, "");
+      if (!NAME_RE.test(name)) { directMsg("That doesn't look like a valid username.", false); return; }
+
+      btn.disabled = true;
+      try {
+        const nameSnap = await getDoc(doc(db, "usernames", name));
+        if (!nameSnap.exists()) { directMsg("No user called @" + name + ".", false); return; }
+        const uid = nameSnap.data().uid;
+        if (auth.currentUser && uid === auth.currentUser.uid) { directMsg("You can't ban yourself.", false); return; }
+
+        const meta = await getDoc(doc(db, "user_meta", uid));
+        const ipHash = meta.exists() ? meta.data().ipHash : null;
+
+        if (!confirm("Ban @" + name + "?\n\nTheir account" + (ipHash ? " and the network they last logged in from" : "") + " will be blocked.")) return;
+
+        const batch = writeBatch(db);
+        batch.set(doc(db, "banned_uids", uid), { username: name, source: "direct", bannedAt: serverTimestamp() });
+        if (ipHash) batch.set(doc(db, "banned_ips", ipHash), { username: name, source: "direct", bannedAt: serverTimestamp() });
+        await batch.commit();
+
+        directMsg(ipHash
+          ? "Banned @" + name + " (account + network)."
+          : "Banned @" + name + " (account only — no network recorded for them yet).", true);
+        $("direct-input").value = "";
+      } catch (err) {
+        console.error(err);
+        directMsg("Couldn't ban (" + (err.code || err.message) + ")", false);
+      } finally { btn.disabled = false; }
+    });
+
+    // ---- bans list ----
+    function renderBans() {
+      const ul = $("bans-list");
+      ul.replaceChildren();
+      const rows = [
+        ...bannedUids.map(b => ({ kind: "uids", id: b.id, label: "Account @" + (b.username || b.id.slice(0, 8)), note: b.source === "direct" ? "direct ban" : "" })),
+        ...bannedIps.map(b => ({ kind: "ips", id: b.id, label: "Network " + b.id.slice(0, 8) + "…", note: (b.username ? "@" + b.username : "") + (b.reason ? (b.username ? " · " : "") + b.reason : "") }))
+      ];
+      $("bans-count").textContent = rows.length;
+      $("bans-empty").classList.toggle("hidden-view", rows.length > 0);
+
+      rows.forEach((row) => {
+        const li = document.createElement("li");
+        li.className = "flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5";
+        const left = document.createElement("div");
+        left.className = "min-w-0";
+        const a = document.createElement("p");
+        a.className = "text-sm font-semibold truncate";
+        a.textContent = row.label;
+        const b = document.createElement("p");
+        b.className = "text-xs text-zinc-500 truncate";
+        b.textContent = row.note || "";
+        left.append(a, b);
+        const un = mkBtn("Unban", "btn-ghost text-zinc-200 !py-1.5 text-xs", async (btn) => {
+          if (!confirm("Unban " + row.label + "?")) return;
+          btn.disabled = true;
+          try {
+            await deleteDoc(doc(db, row.kind === "ips" ? "banned_ips" : "banned_uids", row.id));
+            toast("Unbanned.");
+          } catch (err) {
+            console.error(err);
+            toast("Couldn't unban (" + (err.code || err.message) + ")");
+            btn.disabled = false;
+          }
+        });
+        li.append(left, un);
+        ul.appendChild(li);
+      });
+    }
+
+    // ---- auth gate ----
+    onAuthStateChanged(auth, (user) => {
+      stopPanel();
+      if (!user) { showView("signin"); return; }
+      if ((user.email || "").toLowerCase() !== ADMIN_EMAIL) { showView("denied"); return; }
+      showView("panel");
+      startPanel();
+    });
+  </script>
+</body>
+</html>

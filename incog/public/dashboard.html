@@ -151,6 +151,29 @@
       </p>
     </section>
 
+    <!-- ===================== TERMS ===================== -->
+    <section id="view-terms" class="hidden-view glass rounded-3xl p-7 sm:p-9 fade-in">
+      <p class="text-[11px] uppercase tracking-[.3em] text-fuchsia-300/80">Before you continue</p>
+      <h1 class="mt-1 text-2xl font-extrabold">Terms of Service</h1>
+      <p class="mt-2 text-sm text-zinc-400">Please read and accept the terms to create your account.</p>
+
+      <ul class="mt-4 space-y-1.5 text-sm text-zinc-300 list-disc pl-5">
+        <li>No harassment, hate speech, threats or sexual content.</li>
+        <li>No false reports. Abuse can lead to warnings or bans.</li>
+        <li>Senders stay anonymous to you, but a hashed network address is kept for abuse protection.</li>
+      </ul>
+
+      <a href="terms.html" target="_blank" rel="noopener" class="mt-4 inline-block text-sm text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-4">Read the full Terms of Service ↗</a>
+
+      <label class="mt-5 flex items-start gap-3 rounded-xl border border-white/10 bg-black/30 px-3.5 py-3 cursor-pointer">
+        <input id="terms-check" type="checkbox" class="mt-0.5 accent-fuchsia-500" />
+        <span class="text-sm text-zinc-200">I have read and agree to the Terms of Service.</span>
+      </label>
+
+      <button id="terms-accept" type="button" disabled class="btn-glow mt-5 w-full rounded-xl py-3 font-semibold text-white">Accept &amp; continue</button>
+      <button id="terms-decline" type="button" class="btn-ghost mt-3 w-full rounded-xl py-3 text-sm text-zinc-300">Decline and sign out</button>
+    </section>
+
     <!-- ===================== CLAIM USERNAME ===================== -->
     <section id="view-claim" class="hidden-view glass rounded-3xl p-7 sm:p-9 fade-in">
       <p class="text-[11px] uppercase tracking-[.3em] text-fuchsia-300/80">Step 1</p>
@@ -210,7 +233,7 @@
         <ul id="inbox-list" class="mt-5 space-y-3"></ul>
       </section>
     </div>
-    <p class="mt-8 text-center text-[10px] text-zinc-600">build: mod-v1</p>
+    <p class="mt-8 text-center text-[10px] text-zinc-600">build: terms-v1</p>
   </main>
 
   <!-- ===================================================================== -->
@@ -282,7 +305,7 @@
     const $ = (id) => document.getElementById(id);
     const hide = (el) => el.classList.add("hidden-view");
     const reveal = (el) => el.classList.remove("hidden-view");
-    const VIEWS = ["loading", "auth", "claim", "dash"];
+    const VIEWS = ["loading", "auth", "terms", "claim", "dash"];
     function showView(name) {
       VIEWS.forEach(v => (v === name ? reveal : hide)($("view-" + v)));
       (name === "auth" || name === "loading" ? hide : reveal)($("signout-btn"));
@@ -339,6 +362,11 @@
     });
 
     $("signout-btn").addEventListener("click", () => signOut(auth));
+
+    // ---- Terms screen: accept -> pick username, decline -> no account ----
+    $("terms-check").addEventListener("change", (e) => { $("terms-accept").disabled = !e.target.checked; });
+    $("terms-accept").addEventListener("click", () => { if ($("terms-check").checked) showView("claim"); });
+    $("terms-decline").addEventListener("click", () => { $("terms-check").checked = false; $("terms-accept").disabled = true; signOut(auth); });
 
     // =====================================================================
     // 2) USERNAME CLAIM (unique, permanent)
@@ -676,11 +704,11 @@
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists() && snap.data().username) await enterDashboard(user, snap.data().username);
-        else showView("claim");
+        else showView("terms");
       } catch (err) {
         console.error(err);
         toast("Couldn't load your profile. Check your Firestore rules.");
-        showView("claim");
+        showView("terms");
       }
     });
   </script>

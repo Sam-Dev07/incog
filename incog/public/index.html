@@ -1,189 +1,192 @@
 <!DOCTYPE html>
 <!--
-  incog — AUTH + DASHBOARD (dashboard.html)
-  Flow:  sign up / log in  →  claim a unique username (once)  →  copy your link  →  read your inbox.
-
-  REQUIRED one-time Firebase console setup:
-    1. Build → Authentication → Sign-in method → enable "Email/Password".
-    2. Authentication → Settings → Authorized domains → add the domain you host on
-       (localhost is allowed by default).
-    3. Firestore → Rules → paste the contents of firestore.rules and Publish.
+  incog — PUBLIC SUBMISSION PAGE (index.html)
+  Visitors land here via  index.html?user=USERNAME  and drop an anonymous message.
+  - No sign-in required for the sender.
+  - Only three fields are ever written: messageText, receiverUsername, timestamp.
+    No IP, no location, no device info, no user-agent. Nothing identifying.
 -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>incog — dashboard</title>
+  <title>incog — send an anonymous message</title>
   <meta name="robots" content="noindex" />
 
+  <!-- Tailwind via CDN (no build step) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <style>
-    body { font-family: 'Inter', system-ui, sans-serif; background: #07060d; color: #e9e6f5; min-height: 100vh; overflow-x: hidden; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #07060d;
+      color: #e9e6f5;
+      overflow-x: hidden;
+    }
 
-    /* ---------- Backdrop ---------- */
+    /* ---------- Cyber-noir backdrop: faint grid + drifting glow orbs ---------- */
     .grid-bg {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image:
-        linear-gradient(rgba(168,85,247,.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(168,85,247,.06) 1px, transparent 1px);
+        linear-gradient(rgba(168, 85, 247, .06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(168, 85, 247, .06) 1px, transparent 1px);
       background-size: 44px 44px;
-      mask-image: radial-gradient(ellipse at top, #000 20%, transparent 75%);
-      -webkit-mask-image: radial-gradient(ellipse at top, #000 20%, transparent 75%);
+      mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+      -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
     }
-    .orb { position: fixed; border-radius: 9999px; filter: blur(120px); z-index: 0; pointer-events: none; opacity: .5; }
-    .orb-a { width: 420px; height: 420px; background: #7c3aed; top: -150px; left: -120px; animation: drift 15s ease-in-out infinite alternate; }
-    .orb-b { width: 380px; height: 380px; background: #c026d3; bottom: -160px; right: -100px; animation: drift 18s ease-in-out infinite alternate-reverse; }
-    @keyframes drift { to { transform: translate(40px, 30px) scale(1.1); } }
+    .orb { position: fixed; border-radius: 9999px; filter: blur(110px); z-index: 0; pointer-events: none; opacity: .55; }
+    .orb-a { width: 420px; height: 420px; background: #7c3aed; top: -120px; left: -100px; animation: drift 14s ease-in-out infinite alternate; }
+    .orb-b { width: 380px; height: 380px; background: #c026d3; bottom: -140px; right: -90px; animation: drift 17s ease-in-out infinite alternate-reverse; }
+    @keyframes drift { to { transform: translate(40px, 30px) scale(1.12); } }
 
-    /* ---------- Glass ---------- */
+    /* ---------- Glassmorphic card ---------- */
     .glass {
       background: linear-gradient(145deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
       border: 1px solid rgba(255,255,255,.09);
-      backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
-      box-shadow: 0 0 0 1px rgba(168,85,247,.07), 0 30px 80px -25px rgba(124,58,237,.4), inset 0 1px 0 rgba(255,255,255,.07);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      box-shadow: 0 0 0 1px rgba(168,85,247,.08), 0 30px 80px -20px rgba(124,58,237,.45), inset 0 1px 0 rgba(255,255,255,.08);
     }
-    .field {
-      background: rgba(8,6,16,.65); border: 1px solid rgba(255,255,255,.1);
+
+    /* Logo ring glow */
+    .logo-ring { box-shadow: 0 0 0 2px rgba(192,38,211,.5), 0 0 34px rgba(168,85,247,.6); }
+
+    /* ---------- Textarea ---------- */
+    .drop-input {
+      background: rgba(8, 6, 16, .65);
+      border: 1px solid rgba(255,255,255,.1);
       transition: border-color .2s, box-shadow .2s;
     }
-    .field:focus { outline: none; border-color: rgba(217,70,239,.75); box-shadow: 0 0 0 4px rgba(217,70,239,.14), 0 0 24px rgba(168,85,247,.22); }
+    .drop-input:focus {
+      outline: none;
+      border-color: rgba(217, 70, 239, .75);
+      box-shadow: 0 0 0 4px rgba(217, 70, 239, .14), 0 0 28px rgba(168, 85, 247, .25);
+    }
+
+    /* ---------- Primary button ---------- */
     .btn-glow {
       background: linear-gradient(90deg, #7c3aed, #c026d3);
-      box-shadow: 0 10px 40px -8px rgba(192,38,211,.65);
+      box-shadow: 0 10px 40px -8px rgba(192, 38, 211, .65);
       transition: transform .15s, box-shadow .2s, opacity .2s;
     }
-    .btn-glow:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 50px -6px rgba(217,70,239,.8); }
-    .btn-glow:disabled { opacity: .5; cursor: not-allowed; }
-    .btn-ghost { border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.03); transition: background .2s, border-color .2s; }
-    .btn-ghost:hover { background: rgba(255,255,255,.07); border-color: rgba(217,70,239,.4); }
+    .btn-glow:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 50px -6px rgba(217, 70, 239, .8); }
+    .btn-glow:active:not(:disabled) { transform: translateY(0); }
+    .btn-glow:disabled { opacity: .45; cursor: not-allowed; }
 
-    .hidden-view { display: none !important; }
-    .fade-in { animation: fadeIn .45s ease both; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    /* ---------- View transitions ---------- */
+    .view { transition: opacity .35s ease, transform .35s ease; }
+    .view.hidden-view { opacity: 0; transform: translateY(10px) scale(.98); pointer-events: none; position: absolute; visibility: hidden; }
 
-    /* Message cards */
-    .drop-card { animation: fadeIn .45s ease both; transition: border-color .2s, transform .2s; }
-    .drop-card:hover { border-color: rgba(217,70,239,.35); transform: translateY(-1px); }
-
-    /* Toast */
-    #toast { transition: opacity .3s, transform .3s; }
+    /* ---------- Success checkmark animation ---------- */
+    .ring-pulse { animation: pulse 2.2s ease-out infinite; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(217,70,239,.5); } 100% { box-shadow: 0 0 0 28px rgba(217,70,239,0); } }
+    .check { stroke-dasharray: 60; stroke-dashoffset: 60; animation: draw .7s .15s ease forwards; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
   </style>
 </head>
 
-<body class="relative">
+<body class="min-h-screen flex items-center justify-center p-4 relative">
   <div class="grid-bg"></div>
   <div class="orb orb-a"></div>
   <div class="orb orb-b"></div>
 
-  <div id="toast" class="fixed z-50 top-5 left-1/2 -translate-x-1/2 -translate-y-4 opacity-0 pointer-events-none
-       px-4 py-2.5 rounded-xl text-sm font-medium bg-black/80 border border-fuchsia-400/40 text-fuchsia-100 backdrop-blur"></div>
+  <main class="relative z-10 w-full max-w-md">
+    <section class="glass rounded-3xl p-7 sm:p-9 relative">
 
-  <main class="relative z-10 mx-auto w-full max-w-2xl px-4 py-8 sm:py-12">
-
-    <!-- Brand -->
-    <header class="flex items-center justify-between mb-8">
-      <div class="flex items-center gap-3">
-        <img src="logo.png" alt="" class="h-9 w-9 rounded-full object-cover ring-2 ring-fuchsia-500/50"
-             onerror="this.style.display='none'" />
-        <span class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">incog</span>
+      <!-- ===================== VIEW: LOADING ===================== -->
+      <div id="view-loading" class="view text-center py-16">
+        <div class="mx-auto h-10 w-10 rounded-full border-2 border-fuchsia-500/30 border-t-fuchsia-400 animate-spin"></div>
+        <p class="mt-5 text-sm text-zinc-400 tracking-wide">Establishing secure channel…</p>
       </div>
-      <button id="signout-btn" class="hidden-view btn-ghost rounded-xl px-3.5 py-2 text-xs text-zinc-300">Sign out</button>
-    </header>
 
-    <!-- ===================== LOADING ===================== -->
-    <section id="view-loading" class="glass rounded-3xl p-12 text-center">
-      <div class="mx-auto h-10 w-10 rounded-full border-2 border-fuchsia-500/30 border-t-fuchsia-400 animate-spin"></div>
-      <p class="mt-4 text-sm text-zinc-400">Authenticating…</p>
-    </section>
-
-    <!-- ===================== AUTH (login / sign up) ===================== -->
-    <section id="view-auth" class="hidden-view glass rounded-3xl p-7 sm:p-9 fade-in">
-      <h1 id="auth-title" class="text-2xl font-extrabold">Welcome back</h1>
-      <p id="auth-sub" class="mt-1 text-sm text-zinc-400">Log in to read your anonymous inbox.</p>
-
-      <form id="auth-form" class="mt-6 space-y-4">
-        <div>
-          <label class="text-xs text-zinc-400" for="email">Email</label>
-          <input id="email" type="email" required autocomplete="email" placeholder="you@domain.com"
-                 class="field mt-1 w-full rounded-xl px-4 py-3 text-sm placeholder-zinc-600" />
+      <!-- ===================== VIEW: LANDING (no ?user= in the URL) ===================== -->
+      <div id="view-landing" class="view hidden-view text-center py-6">
+        <div class="logo-ring mx-auto h-24 w-24 rounded-full overflow-hidden bg-black/60 flex items-center justify-center">
+          <img src="logo.png" alt="incog logo" class="h-full w-full object-cover"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <span style="display:none" class="h-full w-full items-center justify-center text-4xl font-extrabold bg-gradient-to-br from-violet-500 to-fuchsia-500 bg-clip-text text-transparent">i</span>
         </div>
-        <div>
-          <label class="text-xs text-zinc-400" for="password">Password</label>
-          <input id="password" type="password" required minlength="6" autocomplete="current-password" placeholder="At least 6 characters"
-                 class="field mt-1 w-full rounded-xl px-4 py-3 text-sm placeholder-zinc-600" />
-        </div>
-        <p id="auth-error" class="hidden-view text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
-        <button id="auth-submit" type="submit" class="btn-glow w-full rounded-xl py-3 font-semibold text-white">Log in</button>
-      </form>
-
-      <div class="mt-5 flex items-center justify-between text-xs text-zinc-400">
-        <button id="auth-toggle" class="text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-4">New here? Create an account</button>
-        <button id="forgot-btn" class="hover:text-zinc-200">Forgot password?</button>
+        <h1 class="mt-6 text-3xl font-extrabold bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">incog</h1>
+        <p class="mt-3 text-sm text-zinc-400 max-w-xs mx-auto">
+          Get your own link. Share it. Your friends send you anonymous messages, and only you can read them.
+        </p>
+        <a href="dashboard.html?mode=signup" class="btn-glow mt-8 block w-full rounded-2xl py-3.5 font-semibold text-white tracking-wide">Create my incog link</a>
+        <a href="dashboard.html" class="mt-3 block w-full rounded-2xl py-3.5 font-semibold text-zinc-200 border border-white/10 hover:border-fuchsia-400/40 transition">Log in</a>
+        <p class="mt-6 text-[11px] text-zinc-500">Free. No tracking. Senders are never identified.</p>
       </div>
-    </section>
 
-    <!-- ===================== CLAIM USERNAME ===================== -->
-    <section id="view-claim" class="hidden-view glass rounded-3xl p-7 sm:p-9 fade-in">
-      <p class="text-[11px] uppercase tracking-[.3em] text-fuchsia-300/80">Step 1</p>
-      <h1 class="mt-1 text-2xl font-extrabold">Claim your handle</h1>
-      <p class="mt-1 text-sm text-zinc-400">This becomes your public incog link. It's permanent, so choose wisely.</p>
+      <!-- ===================== VIEW: NOT FOUND ===================== -->
+      <div id="view-notfound" class="view hidden-view text-center py-10">
+        <div class="text-5xl mb-4">🕳️</div>
+        <h1 class="text-xl font-bold">No one lives here</h1>
+        <p id="notfound-msg" class="mt-2 text-sm text-zinc-400">This incog link is invalid or the user doesn't exist.</p>
+        <a href="dashboard.html" class="inline-block mt-6 text-sm text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-4">Get your own incog link →</a>
+      </div>
 
-      <form id="claim-form" class="mt-6">
-        <div class="relative">
-          <span class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">@</span>
-          <input id="claim-input" type="text" required maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false"
-                 placeholder="username"
-                 class="field w-full rounded-xl pl-9 pr-4 py-3 text-sm placeholder-zinc-600" />
-        </div>
-        <p class="mt-2 text-xs text-zinc-500">3–20 characters · lowercase letters, numbers, underscore.</p>
-        <p id="claim-error" class="hidden-view mt-3 text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
-        <button id="claim-submit" type="submit" class="btn-glow mt-5 w-full rounded-xl py-3 font-semibold text-white">Claim username</button>
-      </form>
-    </section>
-
-    <!-- ===================== PROFILE + INBOX ===================== -->
-    <div id="view-dash" class="hidden-view fade-in space-y-6">
-
-      <!-- Profile / link generator -->
-      <section class="glass rounded-3xl p-7 sm:p-8">
-        <div class="flex items-center gap-4">
-          <div class="h-14 w-14 rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center text-xl font-extrabold shadow-[0_0_30px_rgba(192,38,211,.5)]" id="avatar">?</div>
-          <div class="min-w-0">
-            <p class="text-xs text-zinc-400">Signed in as</p>
-            <h2 id="profile-name" class="text-xl font-extrabold truncate">@username</h2>
+      <!-- ===================== VIEW: FORM ===================== -->
+      <div id="view-form" class="view hidden-view">
+        <!-- Profile header with custom logo -->
+        <div class="flex flex-col items-center text-center">
+          <div class="logo-ring h-20 w-20 rounded-full overflow-hidden bg-black/60 flex items-center justify-center">
+            <!-- Your custom logo. If logo.png is missing we fall back to a glyph. -->
+            <img src="logo.png" alt="incog logo" class="h-full w-full object-cover"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+            <span style="display:none" class="h-full w-full items-center justify-center text-3xl font-extrabold bg-gradient-to-br from-violet-500 to-fuchsia-500 bg-clip-text text-transparent">i</span>
           </div>
+
+          <p class="mt-4 text-[11px] uppercase tracking-[.35em] text-fuchsia-300/80">incog</p>
+          <h1 id="headline" class="mt-2 text-2xl sm:text-[26px] font-extrabold leading-tight">
+            Send <span id="headline-user" class="bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">@user</span> an anonymous message
+          </h1>
+          <p class="mt-2 text-sm text-zinc-400">No name. No trace. Say what you really think.</p>
         </div>
 
-        <button id="gen-btn" class="btn-glow mt-6 w-full rounded-2xl py-3.5 font-semibold text-white tracking-wide">
-          Generate My Incog Link
-        </button>
+        <!-- Message box -->
+        <form id="drop-form" class="mt-7" autocomplete="off">
+          <div class="relative">
+            <textarea id="message" rows="5" maxlength="300" placeholder="Type your secret…"
+              class="drop-input w-full rounded-2xl p-4 text-[15px] text-zinc-100 placeholder-zinc-500 resize-none"></textarea>
+          </div>
 
-        <div id="link-box" class="hidden-view mt-4 fade-in">
-          <div class="field rounded-xl px-4 py-3 text-sm font-mono text-fuchsia-200 break-all select-all" id="link-text"></div>
-          <p class="mt-2 text-xs text-zinc-500">Copied to your clipboard. Paste it in your bio or story.</p>
+          <div class="mt-2 flex items-center justify-between text-xs">
+            <span id="lock-note" class="text-fuchsia-300 opacity-0 transition-opacity">Character limit reached</span>
+            <span id="counter" class="font-mono text-zinc-400">0 / 300</span>
+          </div>
+
+          <p id="error" class="hidden mt-3 text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
+
+          <button id="send-btn" type="submit" disabled
+            class="btn-glow mt-5 w-full rounded-2xl py-3.5 font-semibold text-white tracking-wide">
+            Drop Secret Anonymously
+          </button>
+
+          <p class="mt-4 text-center text-[11px] text-zinc-500">
+            🔒 We never collect your IP, location or device. Ever.
+          </p>
+        </form>
+      </div>
+
+      <!-- ===================== VIEW: SUCCESS ===================== -->
+      <div id="view-success" class="view hidden-view text-center py-8">
+        <div class="ring-pulse mx-auto h-24 w-24 rounded-full flex items-center justify-center bg-gradient-to-br from-violet-600/30 to-fuchsia-600/30 border border-fuchsia-400/40">
+          <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#e879f9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path class="check" d="M5 12.5l4.5 4.5L19 7.5" />
+          </svg>
         </div>
-      </section>
-
-      <!-- Inbox -->
-      <section class="glass rounded-3xl p-7 sm:p-8">
-        <div class="flex items-center justify-between">
-          <h2 class="text-lg font-extrabold">Inbox</h2>
-          <span id="inbox-count" class="text-xs font-mono px-2.5 py-1 rounded-full bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-400/20">0</span>
+        <h2 class="mt-6 text-2xl font-extrabold">Payload transmitted</h2>
+        <p class="mt-2 text-sm text-zinc-400 max-w-xs mx-auto">
+          Your message was securely delivered to <span id="success-user" class="text-fuchsia-300 font-semibold"></span>. They'll never know it was you.
+        </p>
+        <button id="again-btn" class="mt-7 text-sm text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-4">Send another</button>
+        <div class="mt-8 pt-6 border-t border-white/5">
+          <a href="dashboard.html" class="text-xs text-zinc-400 hover:text-zinc-200">Want your own incog link? Get it free →</a>
         </div>
+      </div>
 
-        <p id="inbox-error" class="hidden-view mt-4 text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2"></p>
-
-        <div id="inbox-empty" class="mt-8 mb-4 text-center">
-          <div class="text-4xl">📭</div>
-          <p class="mt-3 text-sm text-zinc-400">Nothing yet. Share your link and wait for the secrets to roll in.</p>
-        </div>
-
-        <ul id="inbox-list" class="mt-5 space-y-3"></ul>
-      </section>
-    </div>
+    </section>
   </main>
 
   <!-- ===================================================================== -->
@@ -192,12 +195,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
     import {
-      getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
-      signInWithEmailAndPassword, signOut, sendPasswordResetEmail
-    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-    import {
-      getFirestore, doc, getDoc, setDoc, runTransaction, serverTimestamp,
-      collection, query, where, onSnapshot
+      getFirestore, doc, getDoc, collection, addDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
     // ---- Firebase config (authDomain corrected to the real *.firebaseapp.com host) ----
@@ -210,275 +208,126 @@
       appId: "1:741424835690:web:70b49cf67ae141e1882e13",
       measurementId: "G-E8YV6TGP6L"
     };
-    const app  = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db   = getFirestore(app);
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
 
-    // ---- Tiny DOM helpers ----
+    // ---- DOM helpers ----
     const $ = (id) => document.getElementById(id);
-    const hide = (el) => el.classList.add("hidden-view");
-    const reveal = (el) => el.classList.remove("hidden-view");
-    const VIEWS = ["loading", "auth", "claim", "dash"];
-    function showView(name) {
-      VIEWS.forEach(v => (v === name ? reveal : hide)($("view-" + v)));
-      (name === "auth" || name === "loading" ? hide : reveal)($("signout-btn"));
+    const views = ["loading", "landing", "notfound", "form", "success"];
+    function show(name) {
+      views.forEach(v => $("view-" + v).classList.toggle("hidden-view", v !== name));
     }
 
-    let toastTimer;
-    function toast(msg) {
-      const t = $("toast");
-      t.textContent = msg;
-      t.style.opacity = "1"; t.style.transform = "translate(-50%, 0)";
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { t.style.opacity = "0"; t.style.transform = "translate(-50%, -16px)"; }, 2200);
-    }
+    const MAX = 300;
+    const COOLDOWN_MS = 15000; // light client-side anti-spam (cannot be fully enforced client-side)
 
-    function friendlyAuthError(code) {
-      const map = {
-        "auth/invalid-email": "That email address doesn't look right.",
-        "auth/missing-password": "Please enter a password.",
-        "auth/weak-password": "Password must be at least 6 characters.",
-        "auth/email-already-in-use": "An account with this email already exists. Try logging in.",
-        "auth/invalid-credential": "Wrong email or password.",
-        "auth/user-not-found": "Wrong email or password.",
-        "auth/wrong-password": "Wrong email or password.",
-        "auth/too-many-requests": "Too many attempts. Wait a bit and try again.",
-        "auth/operation-not-allowed": "Email/Password sign-in isn't enabled in the Firebase console yet.",
-        "auth/network-request-failed": "Network error. Check your connection."
-      };
-      return map[code] || "Something went wrong. Please try again.";
-    }
+    // ---- 1) Extract ?user= from the URL ----
+    const params   = new URLSearchParams(window.location.search);
+    const username = (params.get("user") || "").trim().toLowerCase();
+    const VALID    = /^[a-z0-9_]{3,20}$/;
 
-    // =====================================================================
-    // 1) AUTH: sign up / log in toggle
-    // =====================================================================
-    // dashboard.html?mode=signup opens straight on the sign-up form
-    let mode = new URLSearchParams(window.location.search).get("mode") === "signup" ? "signup" : "login";
-
-    function renderAuthMode() {
-      const signup = mode === "signup";
-      $("auth-title").textContent  = signup ? "Create your account" : "Welcome back";
-      $("auth-sub").textContent    = signup ? "Free forever. No tracking." : "Log in to read your anonymous inbox.";
-      $("auth-submit").textContent = signup ? "Sign up" : "Log in";
-      $("auth-toggle").textContent = signup ? "Already have an account? Log in" : "New here? Create an account";
-      $("password").autocomplete   = signup ? "new-password" : "current-password";
-      hide($("auth-error"));
-    }
-    $("auth-toggle").addEventListener("click", () => { mode = mode === "login" ? "signup" : "login"; renderAuthMode(); });
-
-    $("auth-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const btn = $("auth-submit"), errEl = $("auth-error");
-      hide(errEl);
-      btn.disabled = true;
-      const email = $("email").value.trim(), pw = $("password").value;
+    async function init() {
+      // No ?user= at all -> someone opened the main site: show sign up / log in
+      if (!params.has("user")) {
+        // Send straight to the dashboard (login / sign up). URL becomes /dashboard.html
+        window.location.replace("dashboard.html");
+        return;
+      }
+      if (!VALID.test(username)) {
+        show("notfound");
+        return;
+      }
       try {
-        if (mode === "signup") await createUserWithEmailAndPassword(auth, email, pw);
-        else                   await signInWithEmailAndPassword(auth, email, pw);
-        // onAuthStateChanged takes over from here
+        // Confirm the recipient exists. 'usernames/{name}' is publicly readable.
+        const snap = await getDoc(doc(db, "usernames", username));
+        if (!snap.exists()) {
+          show("notfound");
+          return;
+        }
       } catch (err) {
-        errEl.textContent = friendlyAuthError(err.code);
-        reveal(errEl);
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    $("forgot-btn").addEventListener("click", async () => {
-      const email = $("email").value.trim();
-      if (!email) { toast("Enter your email first, then tap “Forgot password?”"); return; }
-      try { await sendPasswordResetEmail(auth, email); toast("Reset link sent — check your inbox."); }
-      catch (err) { toast(friendlyAuthError(err.code)); }
-    });
-
-    $("signout-btn").addEventListener("click", () => signOut(auth));
-
-    // =====================================================================
-    // 2) USERNAME CLAIM (unique, permanent)
-    //    users/{uid}          -> { username, createdAt }       (public read)
-    //    usernames/{username} -> { uid }                       (uniqueness lock)
-    //    Both are written in ONE transaction so a name can never be double-claimed.
-    // =====================================================================
-    const NAME_RE = /^[a-z0-9_]{3,20}$/;
-
-    $("claim-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const errEl = $("claim-error"), btn = $("claim-submit");
-      hide(errEl);
-
-      const name = $("claim-input").value.trim().toLowerCase();
-      if (!NAME_RE.test(name)) {
-        errEl.textContent = "Use 3–20 characters: lowercase letters, numbers or underscore.";
-        reveal(errEl); return;
-      }
-
-      const user = auth.currentUser;
-      if (!user) return;
-      btn.disabled = true;
-      btn.textContent = "Claiming…";
-
-      try {
-        await runTransaction(db, async (tx) => {
-          const nameRef = doc(db, "usernames", name);
-          const userRef = doc(db, "users", user.uid);
-          if ((await tx.get(nameRef)).exists()) throw new Error("TAKEN");
-          tx.set(nameRef, { uid: user.uid });
-          tx.set(userRef, { username: name, createdAt: serverTimestamp() });
-        });
-        await enterDashboard(user, name);
-      } catch (err) {
-        errEl.textContent = err.message === "TAKEN"
-          ? "That username is already taken. Try another."
-          : "Couldn't claim that username. Please try again.";
-        reveal(errEl);
         console.error(err);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Claim username";
-      }
-    });
-
-    // =====================================================================
-    // 3) DASHBOARD: link generator + live inbox
-    // =====================================================================
-    let currentUsername = null;
-    let unsubscribeInbox = null;
-
-    function buildLink(username) {
-      // Resolves index.html relative to wherever dashboard.html is hosted
-      // (works on a domain root, a sub-folder, or localhost).
-      const u = new URL("index.html", window.location.href);
-      u.search = "";           // clear any params inherited from this page
-      u.hash = "";
-      u.searchParams.set("user", username);
-      return u.toString();     // => [current-domain]/index.html?user=USERNAME
-    }
-
-    async function copyText(text) {
-      try { await navigator.clipboard.writeText(text); return true; }
-      catch (_) {
-        // Fallback for older browsers / non-secure contexts
-        const ta = document.createElement("textarea");
-        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-        document.body.appendChild(ta); ta.select();
-        let ok = false;
-        try { ok = document.execCommand("copy"); } catch (_) {}
-        ta.remove();
-        return ok;
-      }
-    }
-
-    $("gen-btn").addEventListener("click", async () => {
-      if (!currentUsername) return;
-      const link = buildLink(currentUsername);
-      $("link-text").textContent = link;
-      reveal($("link-box"));
-      toast((await copyText(link)) ? "Link copied to clipboard ✦" : "Couldn't auto-copy — select the link manually");
-    });
-
-    function fmtTime(ts) {
-      // serverTimestamp() is null for a split second on local writes; handle it.
-      if (!ts || !ts.toDate) return "just now";
-      const d = ts.toDate();
-      const diff = (Date.now() - d.getTime()) / 1000;
-      if (diff < 60)    return "just now";
-      if (diff < 3600)  return Math.floor(diff / 60) + "m ago";
-      if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
-      return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) +
-             " · " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-    }
-
-    function renderInbox(items) {
-      const list = $("inbox-list");
-      list.replaceChildren();
-      $("inbox-count").textContent = items.length;
-      items.length ? hide($("inbox-empty")) : reveal($("inbox-empty"));
-
-      items.forEach((it, i) => {
-        const li = document.createElement("li");
-        li.className = "drop-card rounded-2xl border border-white/10 bg-black/30 p-4";
-        li.style.animationDelay = Math.min(i * 40, 400) + "ms";
-
-        const top = document.createElement("div");
-        top.className = "flex items-center justify-between text-[11px] uppercase tracking-widest";
-        const who = document.createElement("span");
-        who.className = "text-fuchsia-300/90";
-        who.textContent = "🕶 Anonymous";
-        const when = document.createElement("span");
-        when.className = "text-zinc-500 normal-case tracking-normal";
-        when.textContent = fmtTime(it.timestamp);
-        top.append(who, when);
-
-        // textContent (never innerHTML) => senders can't inject HTML/scripts
-        const body = document.createElement("p");
-        body.className = "mt-2.5 text-[15px] leading-relaxed text-zinc-100 whitespace-pre-wrap break-words";
-        body.textContent = it.messageText;
-
-        li.append(top, body);
-        list.appendChild(li);
-      });
-    }
-
-    function startInbox(username) {
-      if (unsubscribeInbox) unsubscribeInbox();
-      hide($("inbox-error"));
-
-      // Only drops addressed to THIS user. Firestore rules enforce this server-side too.
-      // Sorting is done client-side so you don't need to create a composite index.
-      const q = query(collection(db, "anonymous_drops"), where("receiverUsername", "==", username));
-
-      unsubscribeInbox = onSnapshot(q, (snap) => {
-        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        // timestamp DESC (pending server timestamps = newest)
-        items.sort((a, b) => {
-          const ta = a.timestamp?.toMillis ? a.timestamp.toMillis() : Number.MAX_SAFE_INTEGER;
-          const tb = b.timestamp?.toMillis ? b.timestamp.toMillis() : Number.MAX_SAFE_INTEGER;
-          return tb - ta;
-        });
-        renderInbox(items);
-      }, (err) => {
-        console.error(err);
-        const el = $("inbox-error");
-        el.textContent = err.code === "permission-denied"
-          ? "Permission denied. Publish the Firestore rules from firestore.rules."
-          : "Couldn't load your inbox. Please refresh.";
-        reveal(el);
-      });
-    }
-
-    async function enterDashboard(user, username) {
-      currentUsername = username;
-      $("profile-name").textContent = "@" + username;
-      $("avatar").textContent = username.charAt(0).toUpperCase();
-      hide($("link-box"));
-      showView("dash");
-      startInbox(username);
-    }
-
-    // =====================================================================
-    // 4) AUTH STATE ROUTER
-    // =====================================================================
-    onAuthStateChanged(auth, async (user) => {
-      if (unsubscribeInbox) { unsubscribeInbox(); unsubscribeInbox = null; }
-
-      if (!user) {
-        currentUsername = null;
-        renderAuthMode();
-        showView("auth");
+        $("notfound-msg").textContent = "Couldn't reach the server. Check your connection and try again.";
+        show("notfound");
         return;
       }
 
-      showView("loading");
+      // ---- 2) Dynamic header: "Send @USERNAME an anonymous message" ----
+      $("headline-user").textContent = "@" + username;
+      document.title = `Send @${username} an anonymous message — incog`;
+      $("success-user").textContent = "@" + username;
+      show("form");
+    }
+
+    // ---- 3) Textarea + counter + hard lock at 300 chars ----
+    const textarea = $("message");
+    const counter  = $("counter");
+    const sendBtn  = $("send-btn");
+    const lockNote = $("lock-note");
+
+    function updateCounter() {
+      // maxlength already blocks typing; this also guards against paste edge-cases.
+      if (textarea.value.length > MAX) textarea.value = textarea.value.slice(0, MAX);
+      const len = textarea.value.length;
+      counter.textContent = `${len} / ${MAX}`;
+      const locked = len >= MAX;
+      counter.className = "font-mono " + (locked ? "text-fuchsia-300" : len > 250 ? "text-amber-300" : "text-zinc-400");
+      lockNote.style.opacity = locked ? "1" : "0";
+      sendBtn.disabled = textarea.value.trim().length === 0;
+    }
+    textarea.addEventListener("input", updateCounter);
+
+    function showError(msg) {
+      const el = $("error");
+      el.textContent = msg;
+      el.classList.remove("hidden");
+    }
+    function clearError() { $("error").classList.add("hidden"); }
+
+    // ---- 4) Submit: write EXACTLY { messageText, receiverUsername, timestamp } ----
+    $("drop-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearError();
+
+      const text = textarea.value.trim();
+      if (!text) return;
+
+      // Cooldown
       try {
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (snap.exists() && snap.data().username) await enterDashboard(user, snap.data().username);
-        else showView("claim");
+        const last = Number(localStorage.getItem("incog_last_drop") || 0);
+        if (Date.now() - last < COOLDOWN_MS) {
+          showError("Easy there — wait a few seconds before sending another.");
+          return;
+        }
+      } catch (_) { /* localStorage may be blocked; ignore */ }
+
+      sendBtn.disabled = true;
+      const original = sendBtn.textContent;
+      sendBtn.textContent = "Encrypting & sending…";
+
+      try {
+        await addDoc(collection(db, "anonymous_drops"), {
+          messageText: text.slice(0, MAX),
+          receiverUsername: username,
+          timestamp: serverTimestamp()
+          // Intentionally NOTHING else: no IP, no geo, no device metrics.
+        });
+
+        try { localStorage.setItem("incog_last_drop", String(Date.now())); } catch (_) {}
+        textarea.value = "";
+        updateCounter();
+        show("success");
       } catch (err) {
         console.error(err);
-        toast("Couldn't load your profile. Check your Firestore rules.");
-        showView("claim");
+        showError("Transmission failed. Please try again.");
+      } finally {
+        sendBtn.textContent = original;
+        sendBtn.disabled = textarea.value.trim().length === 0;
       }
     });
+
+    $("again-btn").addEventListener("click", () => { show("form"); textarea.focus(); });
+
+    init();
   </script>
 </body>
 </html>
